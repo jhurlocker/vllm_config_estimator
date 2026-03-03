@@ -796,6 +796,17 @@ def validate_feasibility(
                 )
             )
 
+        # Check for extreme underutilization / excessive scaling
+        # If the model uses less than 10% of the VRAM on the GPU, scaling it across multiple GPUs via TP or PP is highly inefficient.
+        if (tp * pp) > 1 and weights_per_gpu < (mem_per_gpu * 0.10):
+            issues.append(
+                ValidationIssue(
+                    "warning",
+                    "EXCESSIVE_GPU_SCALING",
+                    f"Model weights per GPU ({weights_per_gpu:.1f} GB) utilize <10% of the available {mem_per_gpu} GB. Sharding such a small model across {tp*pp} GPUs via TP/PP introduces communication overhead that will likely destroy performance. Consider reducing GPUs or using Data Parallelism (DP) instead.",
+                )
+            )
+
         qnorm = normalize_quantization(quantization)
         if (
             param_b
