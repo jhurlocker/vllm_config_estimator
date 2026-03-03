@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vLLM Start Config JSON Viewer</title>
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #fdf2f2 0%, #fef2f2 50%, #fff5f5 100%);
+      --panel: #ffffff;
+      --panel-2: #fafafa;
+      --text: #151515;
+      --muted: #525252;
+      --accent: #e00;
+      --accent-hover: #b00;
+      --accent-light: #fecdd3;
+      --ok: #15803d;
+      --warn: #c2410c;
+      --err: #dc2626;
+      --border: #e5e5e5;
+      --chip-bg: #fef2f2;
+      --chip-text: #991b1b;
+      --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      --card-glow: 0 0 40px rgba(238, 0, 0, 0.06);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+    h1, h2, h3 {
+      margin: 0 0 10px;
+      line-height: 1.2;
+    }
+    h1 { 
+      font-size: 1.8rem; 
+      font-weight: 800;
+      background: linear-gradient(90deg, #e00, #151515);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.02em;
+    }
+    h2 { font-size: 1.2rem; color: #151515; font-weight: 700; }
+    h3 { font-size: 1rem; color: #404040; }
+    p { margin: 0; color: var(--muted); line-height: 1.5; }
+    
+    .hero {
+      display: grid;
+      gap: 16px;
+      padding: 28px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      box-shadow: var(--card-shadow);
+      margin-bottom: 24px;
+      border-top: 5px solid #e00;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    input[type="file"] {
+      color: var(--text);
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 0.9rem;
+    }
+    button {
+      background: linear-gradient(135deg, #e00, #b00);
+      color: white;
+      border: 0;
+      border-radius: 4px;
+      padding: 10px 18px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    button.secondary { 
+      background: #ffffff; 
+      color: #151515; 
+      box-shadow: none;
+      border: 1px solid #d1d5db;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25); background: #b00; }
+    button.secondary:hover { background: #f5f5f5; box-shadow: none; }
+    
+    .grid {
+      display: grid;
+      gap: 20px;
+    }
+    .grid.two { grid-template-columns: 1fr 1fr; }
+    
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 22px;
+      box-shadow: var(--card-shadow);
+      border-top: 4px solid #e00;
+    }
+    .subgrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+    }
+    
+    .metric {
+      background: #fafafa;
+      border: 1px solid #e5e5e5;
+      border-radius: 4px;
+      padding: 14px;
+    }
+    .metric .label {
+      color: #e00;
+      font-size: .7rem;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+    .metric .value {
+      font-weight: 800;
+      font-size: 1.25rem;
+      word-break: break-word;
+      color: #151515;
+    }
+    
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-size: .8rem;
+      color: #991b1b;
+      font-weight: 600;
+    }
+    
+    .issues { display: grid; gap: 10px; }
+    .issue { border-radius: 4px; padding: 14px 18px; border: 1px solid var(--border); }
+    .issue.error { border-color: #fca5a5; background: #fef2f2; color: #991b1b; border-left: 5px solid #dc2626; }
+    .issue.warning { border-color: #fcd34d; background: #fffbeb; color: #92400e; border-left: 5px solid #c2410c; }
+    .issue.info { border-color: #bfdbfe; background: #eff6ff; color: #1e40af; border-left: 5px solid #2563eb; }
+    .issue .head { font-weight: 800; margin-bottom: 4px; }
+    
+    .candidate-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .tab {
+      background: var(--panel);
+      border: 1px solid #d1d5db;
+      color: #525252;
+      border-radius: 4px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: .9rem;
+      transition: all 0.2s;
+    }
+    .tab:hover { background: #f5f5f5; color: #151515; }
+    .tab.active { 
+      background: #e00; 
+      color: white; 
+      border-color: #b00; 
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    .codebox {
+      background: #151515;
+      border: 1px solid #404040;
+      border-radius: 4px;
+      padding: 18px;
+      color: #fafafa;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .85rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 300px;
+      overflow: auto;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,0.3);
+    }
+    
+    details summary {
+      cursor: pointer;
+      color: #e00;
+      margin-bottom: 8px;
+      font-weight: 600;
+      user-select: none;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .9rem;
+    }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 12px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { color: #525252; font-weight: 700; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.06em; background: #f5f5f5; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafafa; }
+    
+    .muted { color: var(--muted); }
+    .empty {
+      border: 2px dashed #d1d5db;
+      border-radius: 4px;
+      padding: 56px 28px;
+      text-align: center;
+      color: var(--muted);
+      background: #fafafa;
+      font-weight: 500;
+    }
+    
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .spacer { flex: 1; }
+    .small { font-size: .85rem; }
+    @media (max-width: 900px) { .grid.two { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <div>
+        <h1>vLLM Start Config JSON Viewer</h1>
+        <p>Upload a JSON report from your llm-optimizer wrapper to inspect inputs, estimate metrics, validation issues, and candidate vLLM configs.</p>
+      </div>
+      <div class="controls">
+        <input id="fileInput" type="file" accept="application/json,.json" />
+        <button id="loadSampleBtn" class="secondary" type="button">Load sample schema</button>
+        <button id="clearBtn" class="secondary" type="button">Clear</button>
+        <div class="spacer"></div>
+        <span id="status" class="small muted" style="font-weight:500;">No file loaded</span>
+      </div>
+    </section>
+
+    <div id="emptyState" class="empty">
+      Upload a JSON file to view the report.<br>
+      <span style="font-size: 0.85rem; opacity: 0.8; margin-top: 8px; display: inline-block;">This page runs locally in your browser and does not upload your data anywhere.</span>
+    </div>
+
+    <div id="app" style="display:none" class="grid">
+      <section class="card">
+        <h2>Overview</h2>
+        <div class="subgrid" id="overviewMetrics"></div>
+        <div style="height:12px"></div>
+        <div class="chips" id="overviewChips"></div>
+      </section>
+
+      <div class="grid two">
+        <section class="card">
+          <h2>Inputs</h2>
+          <table><tbody id="inputsTable"></tbody></table>
+        </section>
+        <section class="card">
+          <h2>Parsed Estimate Metrics</h2>
+          <div class="subgrid" id="estimateMetrics"></div>
+          <div style="height:12px"></div>
+          <details>
+            <summary>Raw llm-optimizer output</summary>
+            <div class="codebox" id="rawEstimate"></div>
+          </details>
+        </section>
+      </div>
+
+      <section class="card">
+        <h2>Validation Checks</h2>
+        <div id="validationSummary" class="small muted" style="margin-bottom:12px; font-weight: 500;"></div>
+        <div id="issuesList" class="issues"></div>
+      </section>
+
+      <section class="card">
+        <div class="row" style="margin-bottom:16px">
+          <h2 style="margin:0">Candidate Configs</h2>
+          <div class="spacer"></div>
+          <span class="small muted">Click a tab to inspect each recommendation</span>
+        </div>
+        <div class="candidate-tabs" id="candidateTabs"></div>
+        <div id="candidatePanel"></div>
+      </section>
+
+      <section class="card">
+        <h2>Compare Candidates</h2>
+        <div id="compareTableWrap"></div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const loadSampleBtn = document.getElementById('loadSampleBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const statusEl = document.getElementById('status');
+    const emptyState = document.getElementById('emptyState');
+    const app = document.getElementById('app');
+
+    let currentData = null;
+    let currentCandidateIndex = 0;
+
+    function fmt(v) {
+      if (v === null || v === undefined) return '—';
+      if (typeof v === 'number') {
+        if (Number.isInteger(v)) return String(v);
+        return v.toLocaleString(undefined, { maximumFractionDigits: 3 });
+      }
+      if (typeof v === 'boolean') return v ? 'true' : 'false';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return String(v);
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function setStatus(msg, isError = false) {
+      statusEl.textContent = msg;
+      statusEl.className = 'small ' + (isError ? '' : 'muted');
+      if (isError) statusEl.style.color = 'var(--err)';
+      else statusEl.style.color = '';
+    }
+
+    function copyText(text, btn) {
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('secondary');
+        setTimeout(() => { 
+          btn.textContent = orig; 
+          btn.classList.remove('secondary');
+        }, 1200);
+      }).catch(() => {
+        alert('Copy failed. You can select and copy manually.');
+      });
+    }
+
+    function renderKeyValueTable(tbody, obj) {
+      tbody.innerHTML = '';
+      const entries = Object.entries(obj || {});
+      if (!entries.length) {
+        tbody.innerHTML = '<tr><td class="muted">No data</td></tr>';
+        return;
+      }
+      for (const [k, v] of entries) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><strong>${escapeHtml(k)}</strong></td><td>${escapeHtml(fmt(v))}</td>`;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function metricCard(label, value) {
+      const div = document.createElement('div');
+      div.className = 'metric';
+      div.innerHTML = `<div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(fmt(value))}</div>`;
+      return div;
+    }
+
+    function renderOverview(data) {
+      const overviewMetrics = document.getElementById('overviewMetrics');
+      const overviewChips = document.getElementById('overviewChips');
+      overviewMetrics.innerHTML = '';
+      overviewChips.innerHTML = '';
+
+      const inputs = data.inputs || {};
+      const parsed = data.llm_optimizer?.parsed_metrics || {};
+      const issues = data.validation_issues || [];
+      const candidates = data.candidates || [];
+
+      const errorCount = issues.filter(i => i.level === 'error').length;
+      const warnCount = issues.filter(i => i.level === 'warning').length;
+
+      const tiles = [
+        ['Model', inputs.model],
+        ['GPU', `${inputs.num_gpus ?? '—'}× ${inputs.gpu ?? ''}`.trim()],
+        ['Model Family', data.model_family],
+        ['Estimate TTFT (ms)', parsed.ttft_ms],
+        ['Estimate ITL (ms)', parsed.itl_ms],
+        ['Estimate Output TPS', parsed.output_tps],
+        ['Estimate Req/s', parsed.req_s],
+        ['Candidates', candidates.length],
+      ];
+      tiles.forEach(([l, v]) => overviewMetrics.appendChild(metricCard(l, v)));
+
+      const chips = [
+        `Estimate rc: ${data.llm_optimizer?.returncode ?? '—'}`,
+        `Validation errors: ${errorCount}`,
+        `Validation warnings: ${warnCount}`,
+      ];
+      if (inputs.quantization) chips.push(`Quantization: ${inputs.quantization}`);
+      if (inputs.model_params_b) chips.push(`Params override: ${inputs.model_params_b}B`);
+      chips.forEach(text => {
+        const c = document.createElement('span'); c.className = 'chip'; c.textContent = text; overviewChips.appendChild(c);
+      });
+    }
+
+    function renderEstimate(data) {
+      const estimateWrap = document.getElementById('estimateMetrics');
+      estimateWrap.innerHTML = '';
+      const parsed = data.llm_optimizer?.parsed_metrics || {};
+      const preferredOrder = ['ttft_ms','itl_ms','e2e_s','output_tps','input_tps','req_s','concurrency'];
+      const keys = [...preferredOrder.filter(k => k in parsed), ...Object.keys(parsed).filter(k => !preferredOrder.includes(k))];
+      if (!keys.length) {
+        estimateWrap.appendChild(metricCard('Parsed Metrics', 'None'));
+      } else {
+        keys.forEach(k => estimateWrap.appendChild(metricCard(k, parsed[k])));
+      }
+      const raw = (data.llm_optimizer?.stdout || '').trim() || '(empty)';
+      document.getElementById('rawEstimate').textContent = raw;
+    }
+
+    function renderValidation(data) {
+      const issues = data.validation_issues || [];
+      const wrap = document.getElementById('issuesList');
+      const summary = document.getElementById('validationSummary');
+      wrap.innerHTML = '';
+      const counts = {
+        error: issues.filter(i => i.level === 'error').length,
+        warning: issues.filter(i => i.level === 'warning').length,
+        info: issues.filter(i => i.level === 'info').length,
+      };
+      summary.textContent = `Errors: ${counts.error} · Warnings: ${counts.warning} · Info: ${counts.info}`;
+      if (!issues.length) {
+        wrap.innerHTML = '<div class="issue info"><div class="head">ALL CLEAR</div><div>No obvious feasibility issues detected.</div></div>';
+        return;
+      }
+      for (const issue of issues) {
+        const div = document.createElement('div');
+        div.className = `issue ${issue.level || 'info'}`;
+        div.innerHTML = `
+          <div class="head">${escapeHtml((issue.level || 'info').toUpperCase())} · ${escapeHtml(issue.code || 'UNKNOWN')}</div>
+          <div>${escapeHtml(issue.message || '')}</div>
+        `;
+        wrap.appendChild(div);
+      }
+    }
+
+    function renderCandidateTabs(data) {
+      const tabsWrap = document.getElementById('candidateTabs');
+      tabsWrap.innerHTML = '';
+      const candidates = data.candidates || [];
+      candidates.forEach((c, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tab' + (idx === currentCandidateIndex ? ' active' : '');
+        btn.textContent = c.name || `candidate-${idx+1}`;
+        btn.addEventListener('click', () => {
+          currentCandidateIndex = idx;
+          renderCandidateTabs(data);
+          renderCandidatePanel(data);
+        });
+        tabsWrap.appendChild(btn);
+      });
+      if (!candidates.length) {
+        tabsWrap.innerHTML = '<span class="muted small">No candidate configs found.</span>';
+      }
+    }
+
+    function renderCandidatePanel(data) {
+      const panel = document.getElementById('candidatePanel');
+      panel.innerHTML = '';
+      const candidates = data.candidates || [];
+      if (!candidates.length) {
+        panel.innerHTML = '<div class="empty">No candidate configs in JSON.</div>';
+        return;
+      }
+      const c = candidates[Math.min(currentCandidateIndex, candidates.length - 1)];
+
+      const top = document.createElement('div');
+      top.className = 'grid two';
+
+      const left = document.createElement('div');
+      left.className = 'card';
+      left.style.padding = '16px';
+      left.style.borderTop = 'none'; // Overriding default card border for inner elements
+      left.style.backgroundColor = 'var(--panel-2)';
+      left.style.boxShadow = 'none';
+      
+      const bashArgs = c.vllm_additional_args_bash || c.vllm_additional_args_string || '';
+      left.innerHTML = `
+        <div class="row" style="margin-bottom:12px">
+          <h3 style="margin:0; color:var(--text);">VLLM_ADDITIONAL_ARGS</h3>
+          <div class="spacer"></div>
+          <button type="button" class="secondary" id="copyArgsBtn">Copy</button>
+        </div>
+        <div class="codebox">${escapeHtml(bashArgs)}</div>
+      `;
+      top.appendChild(left);
+
+      const right = document.createElement('div');
+      right.className = 'card';
+      right.style.padding = '16px';
+      right.style.borderTop = 'none';
+      right.style.backgroundColor = 'var(--panel-2)';
+      right.style.boxShadow = 'none';
+      
+      const yamlArgs = c.vllm_additional_args_yaml || c.vllm_additional_args_string || '';
+      const envYaml = `env:\n  - name: VLLM_ADDITIONAL_ARGS\n    value: >-\n      ${yamlArgs}`;
+      right.innerHTML = `
+        <div class="row" style="margin-bottom:12px">
+          <h3 style="margin:0; color:var(--text);">OpenShift env snippet</h3>
+          <div class="spacer"></div>
+          <button type="button" class="secondary" id="copyYamlBtn">Copy</button>
+        </div>
+        <div class="codebox">${escapeHtml(envYaml)}</div>
+      `;
+      top.appendChild(right);
+      panel.appendChild(top);
+
+      const rationaleCard = document.createElement('div');
+      rationaleCard.className = 'card';
+      rationaleCard.style.marginTop = '16px';
+      rationaleCard.style.borderTop = 'none';
+      rationaleCard.style.backgroundColor = 'var(--panel-2)';
+      rationaleCard.style.boxShadow = 'none';
+      rationaleCard.innerHTML = '<h3 style="margin-bottom:12px; color:var(--text);">Rationale</h3>';
+      const rat = c.rationale || {};
+      const ratEntries = Object.entries(rat);
+      if (!ratEntries.length) {
+        rationaleCard.innerHTML += '<div class="muted">No rationale entries found.</div>';
+      } else {
+        const table = document.createElement('table');
+        const tbody = document.createElement('tbody');
+        ratEntries.forEach(([k,v]) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td style="width:32%"><code>${escapeHtml(k)}</code></td><td style="color:#334155;">${escapeHtml(fmt(v))}</td>`;
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        rationaleCard.appendChild(table);
+      }
+      panel.appendChild(rationaleCard);
+
+      document.getElementById('copyArgsBtn').addEventListener('click', (e) => copyText(bashArgs, e.target));
+      document.getElementById('copyYamlBtn').addEventListener('click', (e) => copyText(envYaml, e.target));
+    }
+
+    function renderCompare(data) {
+      const wrap = document.getElementById('compareTableWrap');
+      wrap.innerHTML = '';
+      const candidates = data.candidates || [];
+      if (!candidates.length) {
+        wrap.innerHTML = '<div class="muted">No candidates to compare.</div>';
+        return;
+      }
+
+      const interestingFlags = [
+        '--tensor-parallel-size', '--data-parallel-size', '--gpu-memory-utilization', '--dtype',
+        '--max-model-len', '--max-num-seqs', '--enable-chunked-prefill', '--max-num-batched-tokens',
+        '--max-num-partial-prefills', '--max-long-partial-prefills', '--enable-prefix-caching',
+        '--async-scheduling', '--stream-interval', '--disable-log-requests', '--enable-expert-parallel',
+        '--trust-remote-code', '--cuda-graph-sizes'
+      ];
+
+      function parseArgsList(list) {
+        const map = {};
+        for (let i = 0; i < list.length; i++) {
+          const token = list[i];
+          if (!String(token).startsWith('--')) continue;
+          const next = list[i+1];
+          if (next !== undefined && !String(next).startsWith('--')) {
+            const vals = [String(next)];
+            let j = i + 2;
+            while (j < list.length && !String(list[j]).startsWith('--')) {
+              vals.push(String(list[j]));
+              j++;
+            }
+            map[token] = vals.length > 1 ? vals.join(' ') : vals[0];
+            i = j - 1;
+          } else {
+            map[token] = true;
+          }
+        }
+        return map;
+      }
+
+      const parsed = candidates.map(c => ({ name: c.name, flags: parseArgsList(c.vllm_additional_args_list || []) }));
+      const allFlags = new Set(interestingFlags);
+      parsed.forEach(p => Object.keys(p.flags).forEach(f => allFlags.add(f)));
+      const rows = Array.from(allFlags);
+
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const headRow = document.createElement('tr');
+      headRow.innerHTML = `<th>Flag</th>${parsed.map(p => `<th>${escapeHtml(p.name || '')}</th>`).join('')}`;
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      rows.forEach(flag => {
+        const vals = parsed.map(p => p.flags[flag]);
+        const hasAny = vals.some(v => v !== undefined);
+        if (!hasAny) return;
+        const tr = document.createElement('tr');
+        const distinct = new Set(vals.map(v => JSON.stringify(v))).size;
+        tr.innerHTML = `<td><code>${escapeHtml(flag)}</code></td>` + vals.map(v => {
+          const text = v === undefined ? '—' : (v === true ? 'enabled' : String(v));
+          const style = distinct > 1 ? ' style="color:var(--accent);font-weight:700"' : ' style="color:#334155;"';
+          return `<td${style}>${escapeHtml(text)}</td>`;
+        }).join('');
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+    }
+
+    function renderAll(data) {
+      currentData = data;
+      currentCandidateIndex = 0;
+      emptyState.style.display = 'none';
+      app.style.display = 'grid';
+
+      renderOverview(data);
+      renderKeyValueTable(document.getElementById('inputsTable'), data.inputs || {});
+      renderEstimate(data);
+      renderValidation(data);
+      renderCandidateTabs(data);
+      renderCandidatePanel(data);
+      renderCompare(data);
+    }
+
+    function clearUI() {
+      currentData = null;
+      app.style.display = 'none';
+      emptyState.style.display = 'block';
+      fileInput.value = '';
+      setStatus('No file loaded');
+    }
+
+    function handleFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          renderAll(data);
+          setStatus(`Loaded: ${file.name}`);
+        } catch (err) {
+          console.error(err);
+          setStatus('Failed to parse JSON', true);
+          alert('Invalid JSON file. Please upload a valid report JSON.');
+        }
+      };
+      reader.onerror = () => {
+        setStatus('Failed to read file', true);
+      };
+      reader.readAsText(file);
+    }
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      handleFile(file);
+    });
+
+    clearBtn.addEventListener('click', clearUI);
+
+    loadSampleBtn.addEventListener('click', () => {
+      const sample = {
+        inputs: {
+          model: 'openai/gpt-oss-120b', gpu: 'H100', num_gpus: 8,
+          input_len: 2048, output_len: 256, constraints: 'ttft:p95<8s;itl:p95<30ms',
+          quantization: 'fp8'
+        },
+        model_family: 'gpt-oss',
+        llm_optimizer: {
+          returncode: 0,
+          parsed_metrics: { ttft_ms: 4200, itl_ms: 12.4, output_tps: 6300, req_s: 12.1, concurrency: 64 },
+          stdout: 'Sample llm-optimizer estimate output...',
+          stderr: ''
+        },
+        validation_issues: [
+          { level: 'info', code: 'QUANTIZATION_QUALITY_REMINDER', message: 'Validate quality on your task.' }
+        ],
+        candidates: [
+          {
+            name: 'latency',
+            vllm_additional_args_list: ['--max-model-len','8192','--max-num-seqs','16','--stream-interval','1'],
+            vllm_additional_args_string: '--max-model-len 8192 --max-num-seqs 16 --stream-interval 1',
+            vllm_additional_args_bash: '--max-model-len 8192 \\\n  --max-num-seqs 16 \\\n  --stream-interval 1',
+            vllm_additional_args_yaml: '--max-model-len 8192\n      --max-num-seqs 16\n      --stream-interval 1',
+            rationale: { '--max-num-seqs': 'Lower cap for TTFT protection.', '--stream-interval': 'Smoother streaming.' }
+          }
+        ]
+      };
+      renderAll(sample);
+      setStatus('Loaded sample data');
+    });
+  </script>
+</body>
+</html>

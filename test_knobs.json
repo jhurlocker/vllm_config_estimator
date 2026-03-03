@@ -1,0 +1,173 @@
+{
+  "inputs": {
+    "model": "meta-llama/Llama-3-8B-Instruct",
+    "gpu": "L40",
+    "num_gpus": 1,
+    "num_nodes": 1,
+    "input_len": 1024,
+    "output_len": 256,
+    "constraints": null,
+    "target": null,
+    "model_params_b": null,
+    "quantization": null,
+    "vllm_version_hint": null
+  },
+  "model_family": "llama",
+  "llm_optimizer": {
+    "returncode": 0,
+    "parsed_metrics": {},
+    "stdout": "Error: Could not download or read config.json for meta-llama/Llama-3-8B-Instruct: 401 Client Error. (Request ID: Root=1-69a61645-44ca0ae47a3b56d86873e279;c24028ba-ea4f-48a2-b6ca-109543853f77)\n\nRepository Not Found for url: https://huggingface.co/meta-llama/Llama-3-8B-Instruct/resolve/main/config.json.\nPlease make sure you specified the correct `repo_id` and `repo_type`.\nIf you are trying to access a private or gated repo, make sure you are authenticated. For more details, see https://huggingface.co/docs/huggingface_hub/authentication\nInvalid username or password.\n",
+    "stderr": "Traceback (most recent call last):\n  File \"/home/jhurlocker/.local/lib/python3.14/site-packages/huggingface_hub/utils/_http.py\", line 402, in hf_raise_for_status\n    response.raise_for_status()\n    ~~~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/usr/lib/python3.14/site-packages/requests/models.py\", line 1026, in raise_for_status\n    raise HTTPError(http_error_msg, response=self)\nrequests.exceptions.HTTPError: 401 Client Error: Unauthorized for url: https://huggingface.co/meta-llama/Llama-3-8B-Instruct/resolve/main/config.json\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/home/jhurlocker/Documents/Red_Hat/llm-optimizer/src/llm_optimizer/common.py\", line 479, in get_model_config_and_precision_from_hf\n    config_path = hf_hub_download(repo_id=model_id, filename=\"config.json\")\n  File \"/home/jhurlocker/.local/lib/python3.14/site-packages/huggingface_hub/utils/_validators.py\", line 114, in _inner_fn\n    return fn(*args, **kwargs)\n  File \"/home/jhurlocker/.local/lib/python3.14/site-packages/huggingface_hub/file_download.py\", line 1007, in hf_hub_download\n    return _hf_hub_download_to_cache_dir(\n        # Destination\n    ...<14 lines>...\n        force_download=force_download,\n    )\n  File \"/home/jhurlocker/.local/lib/python3.14/site-packages/huggingface_hub/file_download.py\", line 1114, in _hf_hub_download_to_cache_dir\n    _raise_on_head_call_error(head_call_error, force_download, local_files_only)\n    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/jhurlocker/.local/lib/python3.14/site-packages/huggingface_hub/file_download.py\", line 1655, in _raise_on_head_call_error\n    raise head_call_error\n  File \"/home/jhurlocker/.local/lib/python3.14/site-packages/huggingface_hub/file_download.py\", line 1543, in _get_metadata_or_catch_error\n    metadata = get_hf_file_metadata(\n        url=url, proxies=proxies, timeout=etag_timeout, headers=headers, token=token, endpoint=endpoint\n    )\n  File \"/home/jhurlocker/.local/lib/python3.14/site-packages/huggingface_hub/utils/_validators.py\", line 114, in _inner_fn\n    return fn(*args, **kwargs)\n  File \"/home/jhurlocker/.local/lib/python3.14/site-packages/huggingface_hub/file_download.py\", line 1460, in get_hf_file_metadata\n    r = _request_wrapper(\n        method=\"HEAD\",\n    ...<5 lines>...\n        timeout=timeout,\n    )\n  File \"/home/jhurlocker/.local/lib/python3.14/site-packages/huggingface_hub/file_download.py\", line 283, in _request_wrapper\n    response = _request_wrapper(\n        method=method,\n    ...<2 lines>...\n        **params,\n    )\n  File \"/home/jhurlocker/.local/lib/python3.14/site-packages/huggingface_hub/file_download.py\", line 307, in _request_wrapper\n    hf_raise_for_status(response)\n    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^\n  File \"/home/jhurlocker/.local/lib/python3.14/site-packages/huggingface_hub/utils/_http.py\", line 452, in hf_raise_for_status\n    raise _format(RepositoryNotFoundError, message, response) from e\nhuggingface_hub.errors.RepositoryNotFoundError: 401 Client Error. (Request ID: Root=1-69a61645-44ca0ae47a3b56d86873e279;c24028ba-ea4f-48a2-b6ca-109543853f77)\n\nRepository Not Found for url: https://huggingface.co/meta-llama/Llama-3-8B-Instruct/resolve/main/config.json.\nPlease make sure you specified the correct `repo_id` and `repo_type`.\nIf you are trying to access a private or gated repo, make sure you are authenticated. For more details, see https://huggingface.co/docs/huggingface_hub/authentication\nInvalid username or password.\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/home/jhurlocker/Documents/Red_Hat/llm-optimizer/src/llm_optimizer/cli.py\", line 800, in estimate_performance\n    updated_params, result = run_performance_estimation(params)\n                             ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^\n  File \"/home/jhurlocker/Documents/Red_Hat/llm-optimizer/src/llm_optimizer/performance.py\", line 1108, in run_performance_estimation\n    model_config = get_model_config_and_precision_from_hf(params.model)\n  File \"/home/jhurlocker/Documents/Red_Hat/llm-optimizer/src/llm_optimizer/common.py\", line 483, in get_model_config_and_precision_from_hf\n    raise RuntimeError(\n        f\"Could not download or read config.json for {model_id}: {e}\"\n    )\nRuntimeError: Could not download or read config.json for meta-llama/Llama-3-8B-Instruct: 401 Client Error. (Request ID: Root=1-69a61645-44ca0ae47a3b56d86873e279;c24028ba-ea4f-48a2-b6ca-109543853f77)\n\nRepository Not Found for url: https://huggingface.co/meta-llama/Llama-3-8B-Instruct/resolve/main/config.json.\nPlease make sure you specified the correct `repo_id` and `repo_type`.\nIf you are trying to access a private or gated repo, make sure you are authenticated. For more details, see https://huggingface.co/docs/huggingface_hub/authentication\nInvalid username or password.\n"
+  },
+  "validation_issues": [],
+  "candidates": [
+    {
+      "name": "latency",
+      "vllm_additional_args_list": [
+        "--gpu-memory-utilization",
+        "0.87",
+        "--dtype",
+        "auto",
+        "--max-model-len",
+        "4096",
+        "--max-num-seqs",
+        "24",
+        "--enable-chunked-prefill",
+        "--max-num-batched-tokens",
+        "1024",
+        "--max-num-partial-prefills",
+        "2",
+        "--max-long-partial-prefills",
+        "1",
+        "--enable-prefix-caching",
+        "--stream-interval",
+        "1",
+        "--disable-log-requests"
+      ],
+      "vllm_additional_args_string": "--gpu-memory-utilization 0.87 --dtype auto --max-model-len 4096 --max-num-seqs 24 --enable-chunked-prefill --max-num-batched-tokens 1024 --max-num-partial-prefills 2 --max-long-partial-prefills 1 --enable-prefix-caching --stream-interval 1 --disable-log-requests",
+      "vllm_additional_args_bash": "--gpu-memory-utilization 0.87 \\\n  --dtype auto \\\n  --max-model-len 4096 \\\n  --max-num-seqs 24 \\\n  --enable-chunked-prefill \\\n  --max-num-batched-tokens 1024 \\\n  --max-num-partial-prefills 2 \\\n  --max-long-partial-prefills 1 \\\n  --enable-prefix-caching \\\n  --stream-interval 1 \\\n  --disable-log-requests",
+      "vllm_additional_args_yaml": "--gpu-memory-utilization 0.87\n      --dtype auto\n      --max-model-len 4096\n      --max-num-seqs 24\n      --enable-chunked-prefill\n      --max-num-batched-tokens 1024\n      --max-num-partial-prefills 2\n      --max-long-partial-prefills 1\n      --enable-prefix-caching\n      --stream-interval 1\n      --disable-log-requests",
+      "rationale": {
+        "parallelism": "TP/PP/DP omitted because all are 1 (single-GPU config).",
+        "--enable-expert-parallel": "Not enabled.",
+        "--gpu-memory-utilization": "Set to 0.87 for latency profile on this GPU class.",
+        "--dtype": "Set dtype=auto.",
+        "--max-model-len": "Set to 4096 based on requested context limits and model capacity.",
+        "--max-num-seqs": "latency scheduler cap chosen as 24 to balance concurrency vs TTFT risk.",
+        "--enable-chunked-prefill": "Enabled as a good default for mixed/long prompt handling.",
+        "--max-num-batched-tokens": "Set to 1024 as the latency chunk size limit.",
+        "--max-num-partial-prefills": "Set to 2 for latency prefill scheduling.",
+        "--max-long-partial-prefills": "Set to 1 to limit long-prefill dominance in latency profile.",
+        "--enable-prefix-caching": "Enabled because shared prefixes are expected and/or family preset recommends it.",
+        "--async-scheduling": "Disabled for latency profile to protect TTFT under strict latency goals.",
+        "--stream-interval": "Set to 1 for latency streaming overhead tradeoff.",
+        "--disable-log-requests": "Enabled to reduce request logging overhead."
+      },
+      "tuning_knobs": [
+        "`--max-num-seqs`: Decrease to further protect TTFT (Time To First Token), or increase slightly if you have VRAM to spare.",
+        "`--max-num-batched-tokens`: Lower values force the scheduler to yield more often, improving streaming smoothness at the cost of overall throughput."
+      ],
+      "guidellm_cmd": "guidellm --target http://localhost:8000/v1 \\\n  --model meta-llama/Llama-3-8B-Instruct \\\n  --data-type emulated \\\n  --emulated-prompt-tokens 1024 \\\n  --emulated-generated-tokens 256 \\\n  --max-prompts 500 \\\n  --rate-type concurrency \\\n  --rate 1,2,4,8,16"
+    },
+    {
+      "name": "balanced",
+      "vllm_additional_args_list": [
+        "--gpu-memory-utilization",
+        "0.88",
+        "--dtype",
+        "auto",
+        "--max-model-len",
+        "4096",
+        "--max-num-seqs",
+        "48",
+        "--enable-chunked-prefill",
+        "--max-num-batched-tokens",
+        "2048",
+        "--max-num-partial-prefills",
+        "4",
+        "--max-long-partial-prefills",
+        "1",
+        "--enable-prefix-caching",
+        "--async-scheduling",
+        "--stream-interval",
+        "5",
+        "--disable-log-requests"
+      ],
+      "vllm_additional_args_string": "--gpu-memory-utilization 0.88 --dtype auto --max-model-len 4096 --max-num-seqs 48 --enable-chunked-prefill --max-num-batched-tokens 2048 --max-num-partial-prefills 4 --max-long-partial-prefills 1 --enable-prefix-caching --async-scheduling --stream-interval 5 --disable-log-requests",
+      "vllm_additional_args_bash": "--gpu-memory-utilization 0.88 \\\n  --dtype auto \\\n  --max-model-len 4096 \\\n  --max-num-seqs 48 \\\n  --enable-chunked-prefill \\\n  --max-num-batched-tokens 2048 \\\n  --max-num-partial-prefills 4 \\\n  --max-long-partial-prefills 1 \\\n  --enable-prefix-caching \\\n  --async-scheduling \\\n  --stream-interval 5 \\\n  --disable-log-requests",
+      "vllm_additional_args_yaml": "--gpu-memory-utilization 0.88\n      --dtype auto\n      --max-model-len 4096\n      --max-num-seqs 48\n      --enable-chunked-prefill\n      --max-num-batched-tokens 2048\n      --max-num-partial-prefills 4\n      --max-long-partial-prefills 1\n      --enable-prefix-caching\n      --async-scheduling\n      --stream-interval 5\n      --disable-log-requests",
+      "rationale": {
+        "parallelism": "TP/PP/DP omitted because all are 1 (single-GPU config).",
+        "--enable-expert-parallel": "Not enabled.",
+        "--gpu-memory-utilization": "Set to 0.88 for balanced profile on this GPU class.",
+        "--dtype": "Set dtype=auto.",
+        "--max-model-len": "Set to 4096 based on requested context limits and model capacity.",
+        "--max-num-seqs": "balanced scheduler cap chosen as 48 to balance concurrency vs TTFT risk.",
+        "--enable-chunked-prefill": "Enabled as a good default for mixed/long prompt handling.",
+        "--max-num-batched-tokens": "Set to 2048 as the balanced chunk size limit.",
+        "--max-num-partial-prefills": "Set to 4 for balanced prefill scheduling.",
+        "--max-long-partial-prefills": "Set to 1 to limit long-prefill dominance in balanced profile.",
+        "--enable-prefix-caching": "Enabled because shared prefixes are expected and/or family preset recommends it.",
+        "--async-scheduling": "Enabled for balanced profile to improve throughput/ITL.",
+        "--stream-interval": "Set to 5 for balanced streaming overhead tradeoff.",
+        "--disable-log-requests": "Enabled to reduce request logging overhead."
+      },
+      "tuning_knobs": [
+        "`--max-num-seqs`: Tune up or down based on your SLA. Higher = better throughput, Lower = better latency.",
+        "`--max-model-len`: Lowering this limits maximum request size but allows more simultaneous requests.",
+        "`--enable-chunked-prefill`: Toggling this off might improve small-prompt performance, but can severely penalize TTFT for concurrent requests if prompts are large."
+      ],
+      "guidellm_cmd": "guidellm --target http://localhost:8000/v1 \\\n  --model meta-llama/Llama-3-8B-Instruct \\\n  --data-type emulated \\\n  --emulated-prompt-tokens 1024 \\\n  --emulated-generated-tokens 256 \\\n  --max-prompts 500 \\\n  --rate-type concurrency \\\n  --rate 1,8,32,64,128"
+    },
+    {
+      "name": "throughput",
+      "vllm_additional_args_list": [
+        "--gpu-memory-utilization",
+        "0.89",
+        "--dtype",
+        "auto",
+        "--max-model-len",
+        "4096",
+        "--max-num-seqs",
+        "72",
+        "--enable-chunked-prefill",
+        "--max-num-batched-tokens",
+        "4096",
+        "--max-num-partial-prefills",
+        "8",
+        "--max-long-partial-prefills",
+        "2",
+        "--enable-prefix-caching",
+        "--async-scheduling",
+        "--stream-interval",
+        "10",
+        "--disable-log-requests"
+      ],
+      "vllm_additional_args_string": "--gpu-memory-utilization 0.89 --dtype auto --max-model-len 4096 --max-num-seqs 72 --enable-chunked-prefill --max-num-batched-tokens 4096 --max-num-partial-prefills 8 --max-long-partial-prefills 2 --enable-prefix-caching --async-scheduling --stream-interval 10 --disable-log-requests",
+      "vllm_additional_args_bash": "--gpu-memory-utilization 0.89 \\\n  --dtype auto \\\n  --max-model-len 4096 \\\n  --max-num-seqs 72 \\\n  --enable-chunked-prefill \\\n  --max-num-batched-tokens 4096 \\\n  --max-num-partial-prefills 8 \\\n  --max-long-partial-prefills 2 \\\n  --enable-prefix-caching \\\n  --async-scheduling \\\n  --stream-interval 10 \\\n  --disable-log-requests",
+      "vllm_additional_args_yaml": "--gpu-memory-utilization 0.89\n      --dtype auto\n      --max-model-len 4096\n      --max-num-seqs 72\n      --enable-chunked-prefill\n      --max-num-batched-tokens 4096\n      --max-num-partial-prefills 8\n      --max-long-partial-prefills 2\n      --enable-prefix-caching\n      --async-scheduling\n      --stream-interval 10\n      --disable-log-requests",
+      "rationale": {
+        "parallelism": "TP/PP/DP omitted because all are 1 (single-GPU config).",
+        "--enable-expert-parallel": "Not enabled.",
+        "--gpu-memory-utilization": "Set to 0.89 for throughput profile on this GPU class.",
+        "--dtype": "Set dtype=auto.",
+        "--max-model-len": "Set to 4096 based on requested context limits and model capacity.",
+        "--max-num-seqs": "throughput scheduler cap chosen as 72 to balance concurrency vs TTFT risk.",
+        "--enable-chunked-prefill": "Enabled as a good default for mixed/long prompt handling.",
+        "--max-num-batched-tokens": "Set to 4096 as the throughput chunk size limit.",
+        "--max-num-partial-prefills": "Set to 8 for throughput prefill scheduling.",
+        "--max-long-partial-prefills": "Set to 2 to limit long-prefill dominance in throughput profile.",
+        "--enable-prefix-caching": "Enabled because shared prefixes are expected and/or family preset recommends it.",
+        "--async-scheduling": "Enabled for throughput profile to improve throughput/ITL.",
+        "--stream-interval": "Set to 10 for throughput streaming overhead tradeoff.",
+        "--disable-log-requests": "Enabled to reduce request logging overhead."
+      },
+      "tuning_knobs": [
+        "`--max-num-seqs`: Increase to maximize batching efficiency, up to the limits of your KV cache.",
+        "`--max-num-batched-tokens`: Increase to allow more prompt tokens to be processed in a single forward pass, heavily utilizing GPU compute.",
+        "`--max-model-len`: If your workload doesn't need the full context window, decreasing this frees up significant KV cache for even higher concurrency."
+      ],
+      "guidellm_cmd": "guidellm --target http://localhost:8000/v1 \\\n  --model meta-llama/Llama-3-8B-Instruct \\\n  --data-type emulated \\\n  --emulated-prompt-tokens 1024 \\\n  --emulated-generated-tokens 256 \\\n  --max-prompts 500 \\\n  --rate-type concurrency \\\n  --rate 16,32,64,128,256"
+    }
+  ]
+}

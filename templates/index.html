@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vLLM Start Config Estimator</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; max-width: 1200px; margin: 0 auto; padding: 20px; background-color: #f5f7fa; color: #333; }
+        h1 { color: #2c3e50; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .container { display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch; }
+        .form-section { flex: 1; min-width: 350px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); height: max-content; }
+        .output-section { flex: 2; min-width: 500px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #34495e; }
+        input[type="text"], input[type="number"], select { width: 100%; padding: 8px; border: 1px solid #bdc3c7; border-radius: 4px; box-sizing: border-box; }
+        .checkbox-group { display: flex; align-items: center; gap: 10px; }
+        .checkbox-group input { width: auto; }
+        button { background-color: #3498db; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 4px; cursor: pointer; width: 100%; transition: background 0.3s; margin-top: 10px; font-weight: bold; }
+        button:hover { background-color: #2980b9; }
+        button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+        
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); background-color: #fff; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; font-weight: 600; color: #2c3e50; border-top: 2px solid #3498db; }
+        tr:hover { background-color: #f5f5f5; }
+        td code { background-color: #f1f2f6; padding: 2px 5px; border-radius: 3px; font-family: monospace; color: #e74c3c; font-size: 0.9em; white-space: nowrap; }
+        .rationale { color: #555; font-size: 0.95em; }
+
+        .tabs { display: flex; border-bottom: 1px solid #ccc; margin-bottom: 15px; }
+        .tab { padding: 10px 20px; cursor: pointer; border: 1px solid transparent; border-bottom: none; border-radius: 4px 4px 0 0; background-color: #f1f1f1; margin-right: 5px; }
+        .tab.active { background-color: white; border-color: #ccc; font-weight: bold; color: #3498db; position: relative; bottom: -1px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .alert { padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+        .alert-error { background-color: #fdeaea; border-left: 5px solid #e74c3c; color: #c0392b; }
+        .alert-warning { background-color: #fdf5e6; border-left: 5px solid #f39c12; color: #d35400; }
+        .alert-info { background-color: #eaf2fa; border-left: 5px solid #3498db; color: #2980b9; }
+        .alert-success { background-color: #edf7ed; border-left: 5px solid #2ecc71; color: #27ae60; }
+        
+        .code-block { background-color: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 4px; overflow-x: auto; font-family: monospace; white-space: pre-wrap; font-size: 0.9em; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        hr { border: 0; height: 1px; background: #ecf0f1; margin: 20px 0; }
+        .help-text { font-size: 0.85em; color: #7f8c8d; margin-top: 3px; display: block; }
+        .copy-btn { float: right; background: #ecf0f1; color: #333; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.8em; border: 1px solid #ccc; }
+        .copy-btn:hover { background: #e0e0e0; }
+        
+        .section-title { color: #2c3e50; margin-top: 0; }
+        
+        /* Advanced Settings Toggle */
+        .advanced-toggle { color: #3498db; cursor: pointer; user-select: none; display: flex; align-items: center; font-weight: bold; margin: 15px 0 5px 0; }
+        .advanced-toggle:hover { color: #2980b9; }
+        .advanced-toggle::before { content: '▶'; display: inline-block; width: 20px; transition: transform 0.2s; }
+        .advanced-toggle.open::before { transform: rotate(90deg); }
+        .advanced-content { display: none; padding-left: 10px; border-left: 2px solid #ecf0f1; margin-left: 5px; }
+        .advanced-content.open { display: block; }
+    </style>
+</head>
+<body>
+
+    <h1>vLLM Engine Config Estimator</h1>
+
+    <div class="container">
+        <div class="form-section">
+            <form id="estimateForm">
+                <h3 class="section-title">Cluster & Workload Parameters</h3>
+                
+                <div class="form-group">
+                    <label for="model">Hugging Face Model ID</label>
+                    <input type="text" id="model" name="model" required placeholder="e.g. meta-llama/Meta-Llama-3-8B-Instruct">
+                    <span class="help-text">We fetch the model config from Hugging Face automatically to verify constraints.</span>
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="gpu">GPU Type</label>
+                        <select id="gpu" name="gpu" required>
+                            <option value="H100">H100 (80GB)</option>
+                            <option value="H200">H200 (141GB)</option>
+                            <option value="A100">A100 (80GB)</option>
+                            <option value="A10040G">A100 (40GB)</option>
+                            <option value="L40S">L40S (48GB)</option>
+                            <option value="A6000">A6000 / A6000 Ada (48GB)</option>
+                            <option value="A40">A40 (48GB)</option>
+                            <option value="A10G">A10G (24GB)</option>
+                            <option value="L4">L4 (24GB)</option>
+                            <option value="T4">T4 (16GB)</option>
+                            <option value="V100">V100 (32GB)</option>
+                            <option value="V10016G">V100 (16GB)</option>
+                            <option value="RTX4090">RTX 4090 (24GB)</option>
+                            <option value="MI300X">MI300X (192GB)</option>
+                            <option value="MI250">MI250 (128GB)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="num_gpus">Total GPUs</label>
+                        <input type="number" id="num_gpus" name="num_gpus" min="1" value="1" required>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="num_nodes">Total Nodes</label>
+                        <input type="number" id="num_nodes" name="num_nodes" min="1" value="1" required>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="input_len">Avg Prompt Length</label>
+                        <input type="number" id="input_len" name="input_len" required value="1024">
+                        <span class="help-text">Tokens</span>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="output_len">Avg Generation Length</label>
+                        <input type="number" id="output_len" name="output_len" required value="256">
+                        <span class="help-text">Tokens</span>
+                    </div>
+                </div>
+
+                <hr>
+                <h3 class="section-title">Optimization Directives</h3>
+                
+                <div style="display: flex; gap: 10px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="dtype">Weights Data Type</label>
+                        <select id="dtype" name="dtype">
+                            <option value="auto">Auto</option>
+                            <option value="bfloat16">bfloat16</option>
+                            <option value="float16">float16</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="quantization">Quantization (Optional)</label>
+                        <select id="quantization" name="quantization">
+                            <option value="">None (Native)</option>
+                            <option value="fp8">FP8</option>
+                            <option value="int8">INT8 (AWQ/GPTQ)</option>
+                            <option value="int4">INT4 (AWQ/GPTQ)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="max_model_len">Target Context Window Limit</label>
+                    <input type="number" id="max_model_len" name="max_model_len" placeholder="e.g. 8192 (Leave empty to infer from model config)">
+                    <span class="help-text">Caps the KV cache allocation. Lowering this increases concurrency throughput.</span>
+                </div>
+                
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="expect_shared_prefix" name="expect_shared_prefix">
+                    <label for="expect_shared_prefix">Enable Prefix Caching (Good for Chat/RAG/Agents)</label>
+                </div>
+                
+                <div class="advanced-toggle" onclick="toggleAdvanced()">Advanced & Overrides</div>
+                <div id="advanced-settings" class="advanced-content">
+                    <div class="form-group">
+                        <label for="constraints">Optimizer Constraints</label>
+                        <input type="text" id="constraints" name="constraints" placeholder="e.g. ttft:p95<2s;itl:p95<50ms">
+                        <span class="help-text">Filter output profiles against SLA constraints</span>
+                    </div>
+                    
+                    <div class="form-group checkbox-group" style="margin-top: 15px;">
+                        <input type="checkbox" id="trust_remote_code" name="trust_remote_code">
+                        <label for="trust_remote_code">Trust Remote Code</label>
+                    </div>
+                    
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="enable_expert_parallel" name="enable_expert_parallel">
+                        <label for="enable_expert_parallel">Force Expert Parallelism (MoE)</label>
+                        <span class="help-text" style="margin-left: 25px;">(Usually auto-detected from HuggingFace)</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="model_family">Model Family Preset</label>
+                        <select id="model_family" name="model_family">
+                            <option value="">Auto-detect</option>
+                            <option value="gpt-oss">GPT-OSS</option>
+                            <option value="llama">Llama</option>
+                            <option value="qwen">Qwen</option>
+                            <option value="granite">Granite</option>
+                            <option value="default">Default</option>
+                        </select>
+                        <span class="help-text">Overrides the family preset for scheduling traits.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="model_params_b">Model Parameters (Billions)</label>
+                        <input type="number" step="0.01" id="model_params_b" name="model_params_b" placeholder="e.g. 70.5">
+                        <span class="help-text">Override auto-detected parameter count for memory estimates.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="target">Estimation Target</label>
+                        <input type="text" id="target" name="target" placeholder="e.g. throughput">
+                        <span class="help-text">Override internal llm-optimizer target selection.</span>
+                    </div>
+                </div>
+
+                <button type="submit" id="submitBtn">Generate Recommended Configs</button>
+            </form>
+            
+            <hr>
+            <div style="margin-top: 20px; background-color: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e1e4e8;">
+                <h4 style="margin-top: 0; color: #2c3e50;">💡 Tips & Helpful Links</h4>
+                <ul style="font-size: 0.9em; padding-left: 20px; color: #555; margin-bottom: 0;">
+                    <li><a href="https://docs.vllm.ai/en/latest/models/engine_args.html" target="_blank" style="color: #3498db;">vLLM Official Engine Arguments Documentation</a></li>
+                    <li style="margin-top: 5px;"><a href="https://docs.vllm.ai/en/latest/serving/distributed_serving.html" target="_blank" style="color: #3498db;">vLLM Distributed Serving Docs</a></li>
+                    <li style="margin-top: 8px;"><strong>Data Type & Quantization:</strong> If a model won't fit natively, consider switching to <code>fp8</code> or <code>int4</code> AWQ to dramatically reduce weight footprint.</li>
+                    <li style="margin-top: 8px;"><strong>Context Window:</strong> Lowering <code>Target Context Window Limit</code> greatly reduces the memory required for the KV Cache, freeing up space for higher concurrency.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="output-section">
+            <h3 class="section-title">Estimation Results</h3>
+            <div id="loader" class="loader"></div>
+            
+            <div id="output-container" style="display: none;">
+                <div id="issues-container"></div>
+                
+                <div class="tabs" id="tabs-container">
+                    <div class="tab active" onclick="switchTab('balanced')">Balanced</div>
+                    <div class="tab" onclick="switchTab('throughput')">Max Throughput</div>
+                    <div class="tab" onclick="switchTab('latency')">Min Latency</div>
+                    <div class="tab" onclick="switchTab('optimizer')">LLM-Optimizer Report</div>
+                    <div class="tab" onclick="switchTab('raw')">Raw JSON</div>
+                </div>
+
+                <div id="tab-balanced" class="tab-content active"></div>
+                <div id="tab-throughput" class="tab-content"></div>
+                <div id="tab-latency" class="tab-content"></div>
+                <div id="tab-optimizer" class="tab-content">
+                    <pre class="code-block" id="optimizer-stdout"></pre>
+                </div>
+                <div id="tab-raw" class="tab-content">
+                    <pre class="code-block" id="raw-json"></pre>
+                </div>
+            </div>
+            
+            <div id="error-container" style="display: none;" class="alert alert-error">
+                <strong>Error running estimation!</strong>
+                <pre id="error-text" style="background: transparent; color: inherit; padding: 0; margin-top: 10px;"></pre>
+            </div>
+            
+            <div id="initial-state" style="text-align: center; color: #7f8c8d; margin-top: 50px;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 15px; opacity: 0.5;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                <p>Ready for estimation. Fill out the parameters on the left and submit.</p>
+                <p style="font-size: 0.9em;">The system will automatically query HuggingFace to identify the model architecture, calculate optimal 3D parallelism strategies (Tensor, Pipeline, and Data Parallelism), and size the KV cache for the requested context window.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleAdvanced() {
+            const toggle = document.querySelector('.advanced-toggle');
+            const content = document.getElementById('advanced-settings');
+            toggle.classList.toggle('open');
+            content.classList.toggle('open');
+        }
+
+        function switchTab(tabId) {
+            // Update tabs
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Update content
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+        }
+
+        function copyToClipboard(elementId) {
+            const el = document.getElementById(elementId);
+            const text = el.innerText || el.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = el.previousElementSibling;
+                const originalText = btn.innerText;
+                btn.innerText = 'Copied!';
+                setTimeout(() => { btn.innerText = originalText; }, 2000);
+            });
+        }
+
+        function renderCandidate(candidate) {
+            let tuningKnobsHtml = '';
+            if (candidate.tuning_knobs && candidate.tuning_knobs.length > 0) {
+                tuningKnobsHtml = `
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="margin-top: 0;">Top Tuning Knobs</h4>
+                        <ul style="margin-top: 5px;">
+                            ${candidate.tuning_knobs.map(knob => `<li>${knob.replace(/`([^`]+)`/g, '<code>$1</code>')}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            let guidellmHtml = '';
+            if (candidate.guidellm_cmd) {
+                guidellmHtml = `
+                    <div style="margin-bottom: 20px;">
+                        <button class="copy-btn" onclick="copyToClipboard('guidellm-${candidate.name}')">Copy bash</button>
+                        <h4 style="margin-top: 0;">GuideLLM Benchmark Command</h4>
+                        <div class="code-block" id="guidellm-${candidate.name}">${candidate.guidellm_cmd}</div>
+                    </div>
+                `;
+            }
+
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <button class="copy-btn" onclick="copyToClipboard('code-${candidate.name}')">Copy bash</button>
+                    <h4 style="margin-top: 0;">Bash Launch Arguments</h4>
+                    <div class="code-block" id="code-${candidate.name}">${candidate.vllm_additional_args_bash}</div>
+                </div>
+                
+                ${tuningKnobsHtml}
+                
+                ${guidellmHtml}
+                
+                <h4>Argument Rationale</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="30%">vLLM Argument</th>
+                            <th>Value</th>
+                            <th>Rationale & Explanation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            // Iterate over rationale
+            for (const [arg, rationale] of Object.entries(candidate.rationale)) {
+                
+                // Try to find the actual value if it's in the args list
+                let value = "<em>Flag</em>";
+                if (arg !== "parallelism" && arg !== "quantization") {
+                    const idx = candidate.vllm_additional_args_list.indexOf(arg);
+                    if (idx !== -1 && idx + 1 < candidate.vllm_additional_args_list.length && !candidate.vllm_additional_args_list[idx+1].startsWith("--")) {
+                        value = candidate.vllm_additional_args_list[idx+1];
+                    }
+                } else if (arg === "parallelism") {
+                    value = "<em>N/A</em>";
+                }
+
+                html += `
+                    <tr>
+                        <td><code><a href="https://docs.vllm.ai/en/latest/models/engine_args.html" target="_blank" title="View vLLM docs for this argument" style="color: inherit; text-decoration: none; border-bottom: 1px dotted #ccc;">${arg}</a></code></td>
+                        <td><strong>${value}</strong></td>
+                        <td class="rationale">${rationale}</td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                    </tbody>
+                </table>
+            `;
+            
+            return html;
+        }
+
+        document.getElementById('estimateForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const form = e.target;
+            const submitBtn = document.getElementById('submitBtn');
+            const loader = document.getElementById('loader');
+            const outputContainer = document.getElementById('output-container');
+            const errorContainer = document.getElementById('error-container');
+            const initialState = document.getElementById('initial-state');
+            
+            // UI state
+            submitBtn.disabled = true;
+            submitBtn.innerText = "Estimating...";
+            initialState.style.display = 'none';
+            outputContainer.style.display = 'none';
+            errorContainer.style.display = 'none';
+            loader.style.display = 'block';
+
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/estimate', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.json) {
+                    const result = data.json;
+                    
+                    // Render Issues
+                    const issuesContainer = document.getElementById('issues-container');
+                    issuesContainer.innerHTML = '';
+                    
+                    if (result.validation_issues && result.validation_issues.length > 0) {
+                        let hasErrors = false;
+                        result.validation_issues.forEach(issue => {
+                            const div = document.createElement('div');
+                            const levelClass = issue.level === 'error' ? 'alert-error' : (issue.level === 'warning' ? 'alert-warning' : 'alert-info');
+                            if (issue.level === 'error') hasErrors = true;
+                            
+                            div.className = `alert ${levelClass}`;
+                            div.innerHTML = `<strong>${issue.level.toUpperCase()}: ${issue.code}</strong><br>${issue.message}`;
+                            issuesContainer.appendChild(div);
+                        });
+                        
+                        if (hasErrors) {
+                            const fatal = document.createElement('div');
+                            fatal.className = 'alert alert-error';
+                            fatal.innerHTML = '<strong>⚠️ FATAL FEASIBILITY ERRORS DETECTED.</strong> The configurations below are provided for reference but will likely fail to run (OOM) due to the constraints above.';
+                            issuesContainer.prepend(fatal);
+                        }
+                    } else {
+                        issuesContainer.innerHTML = '<div class="alert alert-success"><strong>✅ Success:</strong> Model configuration appears feasible on this hardware. No critical issues detected.</div>';
+                    }
+                    
+                    // Render Candidates
+                    result.candidates.forEach(c => {
+                        const tab = document.getElementById('tab-' + c.name);
+                        if (tab) {
+                            tab.innerHTML = renderCandidate(c);
+                        }
+                    });
+                    
+                    // Render LLM-Optimizer Output
+                    if (result.llm_optimizer && result.llm_optimizer.stdout) {
+                        document.getElementById('optimizer-stdout').innerText = result.llm_optimizer.stdout.trim() + (result.llm_optimizer.stderr ? '\n\n' + result.llm_optimizer.stderr.trim() : '');
+                    } else {
+                        document.getElementById('optimizer-stdout').innerText = "No LLM-Optimizer output available.";
+                    }
+                    
+                    // Render Raw metrics
+                    document.getElementById('raw-json').innerText = JSON.stringify(result, null, 2);
+                    
+                    outputContainer.style.display = 'block';
+                    // Reset to balanced tab
+                    document.querySelector('.tab[onclick="switchTab(\'balanced\')"]').click();
+                    
+                } else {
+                    // Fallback if no JSON parsed
+                    errorContainer.style.display = 'block';
+                    document.getElementById('error-text').innerText = (data.stdout + '\n' + data.stderr).trim() || "Unknown error occurred.";
+                }
+
+            } catch (error) {
+                errorContainer.style.display = 'block';
+                document.getElementById('error-text').innerText = "Error connecting to server: " + error.message;
+            } finally {
+                // Restore UI
+                loader.style.display = 'none';
+                submitBtn.disabled = false;
+                submitBtn.innerText = "Generate Recommended Configs";
+            }
+        });
+    </script>
+</body>
+</html>
