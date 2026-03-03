@@ -1,6 +1,6 @@
 # vLLM Start Config Estimator
 
-A comprehensive, UI-driven tool powered by `llm-optimizer` designed to help consultants and engineers instantly generate, validate, and understand the optimal vLLM engine arguments for deploying Large Language Models.
+A comprehensive, UI-driven tool powered by `llm-optimizer` designed to help users instantly generate, validate, and understand the optimal vLLM engine arguments for deploying Large Language Models.
 
 - **Automates the Math:** Takes the hardware availability, model architecture, and workload shape to calculate VRAM footprint instantly.
 - **HuggingFace Integration:** Automatically queries model architectures, expert counts (MoE), and context lengths from HF.
@@ -49,7 +49,7 @@ This repository contains a production-ready `Dockerfile` specifically configured
 
 - `vllm_start_config_from_estimate.py`: The core mathematical and logical engine. This script hooks into Hugging Face to inspect model structures (`config.json`), calculates hardware feasibility, designs 3D Parallelism topologies (TP, PP, DP), and emits the three candidate profiles (latency, throughput, balanced).
 - `app.py`: A lightweight Flask server that exposes the Python script's functionality via a REST API (`/estimate`). It handles parsing form data, executing the script safely with timeouts, and returning the structured JSON payload.
-- `templates/index.html`: The frontend user interface. It provides a clean, consultant-friendly form with advanced toggles, dynamically renders the JSON responses into tabulated profiles, and surfaces critical alerts or hardware warnings.
+- `templates/index.html`: The frontend user interface. It provides a clean, user-friendly form with advanced toggles, dynamically renders the JSON responses into tabulated profiles, and surfaces critical alerts or hardware warnings.
 - `src/`: The core `llm-optimizer` source code which provides theoretical roofline analysis and arithmetic intensity bounds that inform the heuristics.
 - `generate_deck.py`: A utility script that utilizes `python-pptx` to programmatically generate a Google Slides/PowerPoint presentation explaining the tool's value and usage. 
 
@@ -63,4 +63,4 @@ The UI provides an **Advanced & Overrides** section. These map directly to under
 
 ## Community & Contributing
 
-`llm-optimizer` was originally built by BentoML and heavily modified to support this consultant estimation workflow. We welcome contributions of all kinds, such as new features, bug fixes, and documentation.
+`llm-optimizer` was originally built by BentoML and heavily modified to support this configuration estimation workflow. We welcome contributions of all kinds, such as new features, bug fixes, and documentation.
