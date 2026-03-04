@@ -1008,9 +1008,24 @@ def fetch_valid_vllm_args(version: str) -> Optional[Set[str]]:
             req = urllib.request.Request(url)
             with urllib.request.urlopen(req, timeout=5) as response:
                 content = response.read().decode("utf-8")
+
+                # 1. Match explicit string arguments like parser.add_argument("--foo")
                 matches = re.findall(r"[\'\"](--[a-zA-Z0-9\-]+)[\'\"]", content)
                 for match in matches:
                     all_args.add(match)
+
+                # 2. In older vLLM versions (like < 0.6.0), engine arguments were primarily defined
+                # as @dataclass fields which were then programmatically converted to CLI args.
+                # E.g. max_num_seqs: int = 256 -> --max-num-seqs
+                fields = re.findall(
+                    r"^\s+([a-zA-Z0-9_]+)\s*:\s*[a-zA-Z0-9_\[\]\s,]+(?:=.*)?$",
+                    content,
+                    re.MULTILINE,
+                )
+                for field in fields:
+                    flag = f"--{field.replace('_', '-')}"
+                    all_args.add(flag)
+
                 success = True
         except Exception:
             pass
@@ -1477,8 +1492,8 @@ def build_candidate_config(
         f"Set to {max_num_batched_tokens} as the {candidate_name} chunk size limit."
     )
 
-    # Partial prefill limits were introduced around v0.7.0.
-    if v >= (0, 7, 0):
+    # Partial prefill limits were introduced around v0.8.0.
+    if v >= (0, 8, 0):
         args += ["--max-num-partial-prefills", str(max_partial_prefills)]
         rationale["--max-num-partial-prefills"] = (
             f"Set to {max_partial_prefills} for {candidate_name} prefill scheduling."
@@ -1499,25 +1514,31 @@ def build_candidate_config(
             "Not enabled by default for this profile/family without shared-prefix expectation."
         )
 
-    # Async scheduling was added in recent versions (>= 0.6.0).
-    if async_sched and v >= (0, 6, 0):
+    # Async scheduling was added in v0.10.0
+    if async_sched and v >= (0, 10, 0):
         args += ["--async-scheduling"]
         rationale["--async-scheduling"] = (
             f"Enabled for {candidate_name} profile to improve throughput/ITL."
         )
     elif async_sched:
         rationale["--async-scheduling"] = (
-            f"Disabled because vLLM version ({vllm_version_hint}) is too old to support async-scheduling."
+            f"Disabled because vLLM version ({vllm_version_hint}) is too old to support async-scheduling (requires >= 0.10.0)."
         )
     else:
         rationale["--async-scheduling"] = (
             f"Disabled for {candidate_name} profile to protect TTFT under strict latency goals."
         )
 
-    args += ["--stream-interval", str(stream_interval)]
-    rationale["--stream-interval"] = (
-        f"Set to {stream_interval} for {candidate_name} streaming overhead tradeoff."
-    )
+    # Stream interval was added in v0.11.0 (or very late v0.10.x, but explicitly verified in 0.11.2)
+    if v >= (0, 11, 0):
+        args += ["--stream-interval", str(stream_interval)]
+        rationale["--stream-interval"] = (
+            f"Set to {stream_interval} for {candidate_name} streaming overhead tradeoff."
+        )
+    else:
+        rationale["--stream-interval"] = (
+            f"Disabled because vLLM version ({vllm_version_hint}) is too old to support stream-interval (requires >= 0.11.0)."
+        )
 
     args += ["--disable-log-requests"]
     rationale["--disable-log-requests"] = "Enabled to reduce request logging overhead."
