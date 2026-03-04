@@ -215,7 +215,14 @@ def calculate_model_parameters_from_config(config: dict) -> int:
         # Extract parameters needed for calculation
         h = config["hidden_size"]
         n_layers = config["num_hidden_layers"]
-        i = config["intermediate_size"]
+        
+        # Determine intermediate size, fallback to moe_intermediate_size if needed
+        i = config.get("intermediate_size")
+        if i is None:
+            i = config.get("moe_intermediate_size")
+            if i is None:
+                # If both are missing, estimate it as 4x hidden_size for standard MLPs
+                i = h * 4
         v = config["vocab_size"]
         n_heads = config.get("num_attention_heads", 0)
         n_kv_heads = config.get("num_key_value_heads", n_heads)
