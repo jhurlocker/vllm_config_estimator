@@ -961,6 +961,9 @@ def normalize_quantization(q: Optional[str]) -> Optional[str]:
         "bfloat16": "bf16",
         "fp8": "fp8",
         "float8": "fp8",
+        "fp4": "fp4",
+        "float4": "fp4",
+        "nvfp4": "fp4",
         "int8": "int8",
         "8bit": "int8",
         "int4": "int4",
@@ -985,6 +988,8 @@ def effective_bytes_per_param(dtype: str, quantization: Optional[str]) -> float:
     """
     q = normalize_quantization(quantization)
     if q == "int4":
+        return 0.5
+    if q == "fp4":
         return 0.5
     if q == "int8":
         return 1.0
