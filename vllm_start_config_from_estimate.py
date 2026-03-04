@@ -188,6 +188,49 @@ def get_hf_max_context(config: Optional[Dict]) -> Optional[int]:
     return None
 
 
+def detect_quantization_from_config(config: Optional[Dict]) -> Optional[str]:
+    """
+    Attempts to detect the quantization scheme (e.g. 'int4', 'fp8', 'awq') directly
+    from the Hugging Face config.json if present.
+
+    Args:
+        config: The Hugging Face configuration dictionary.
+
+    Returns:
+        A string representing the detected quantization format, or None if not found/recognized.
+    """
+    if not config:
+        return None
+
+    q_config = config.get("quantization_config", {})
+    if not q_config:
+        return None
+
+    method = q_config.get("quant_method", "").lower()
+    bits = q_config.get("bits", None)
+
+    if method == "fp8":
+        return "fp8"
+    if method in ["awq", "gptq"]:
+        return "int4" if bits == 4 else method
+
+    if method == "compressed-tensors":
+        groups = q_config.get("config_groups", {})
+        for _, group_info in groups.items():
+            weights = group_info.get("weights", {})
+            num_bits = weights.get("num_bits")
+            q_type = weights.get("type", "").lower()
+
+            if q_type == "int" and num_bits == 4:
+                return "int4"
+            if q_type == "int" and num_bits == 8:
+                return "int8"
+            if q_type == "float" and num_bits == 8:
+                return "fp8"
+
+    return None
+
+
 def normalize_gpu_name(gpu: str) -> str:
     """
     Normalizes a GPU string identifier to a standard canonical name.
@@ -1829,6 +1872,11 @@ def main() -> int:
         return est.returncode
 
     candidates: List[CandidateConfig] = []
+
+    # Auto-detect quantization if not explicitly provided
+    detected_quant = detect_quantization_from_config(hf_config)
+    effective_quantization = args.quantization or detected_quant
+
     for name in ("latency", "balanced", "throughput"):
         c = build_candidate_config(
             candidate_name=name,
@@ -1843,7 +1891,7 @@ def main() -> int:
             estimate_metrics=est.parsed,
             chat_template=args.chat_template,
             dtype=args.dtype,
-            quantization=args.quantization,
+            quantization=effective_quantization,
             trust_remote_code=trust_remote_code,
             max_model_len_override=args.max_model_len,
             include_cuda_graph_sizes=args.include_cuda_graph_sizes,
@@ -1892,6 +1940,8 @@ def main() -> int:
             or "4096"
         )
 
+        quantization = args.quantization or detect_quantization_from_config(hf_config)
+
         c_issues = validate_feasibility(
             model=args.model,
             family=family,
@@ -1901,7 +1951,7 @@ def main() -> int:
             input_len=args.input_len,
             output_len=args.output_len,
             dtype=args.dtype,
-            quantization=args.quantization,
+            quantization=quantization,
             tp=c_tp,
             pp=c_pp,
             max_model_len=c_max_model_len,
