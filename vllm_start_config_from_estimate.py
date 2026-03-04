@@ -1096,8 +1096,6 @@ def validate_feasibility(
                         )
                     )
 
-    return issues
-
     if tp < 1:
         issues.append(
             ValidationIssue("error", "TP_INVALID", "tensor_parallel_size must be >= 1")
