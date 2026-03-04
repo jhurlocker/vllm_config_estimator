@@ -22,6 +22,15 @@ from typing import Dict, List, Optional, Tuple
 
 
 def which(cmd: str) -> Optional[str]:
+    """
+    Locates the executable path for a given command in the system PATH.
+
+    Args:
+        cmd: The name of the command to locate.
+
+    Returns:
+        The absolute path to the executable if found, otherwise None.
+    """
     for d in os.environ.get("PATH", "").split(os.pathsep):
         p = Path(d) / cmd
         if p.exists() and os.access(p, os.X_OK):
@@ -32,16 +41,46 @@ def which(cmd: str) -> Optional[str]:
 def run_cmd(
     cmd: List[str], timeout: Optional[int] = None
 ) -> subprocess.CompletedProcess:
+    """
+    Executes a shell command safely using subprocess.run.
+
+    Args:
+        cmd: A list of command arguments.
+        timeout: Optional timeout in seconds for the command execution.
+
+    Returns:
+        A subprocess.CompletedProcess instance containing the execution result.
+    """
     return subprocess.run(
         cmd, text=True, capture_output=True, timeout=timeout, check=False
     )
 
 
 def shell_join(args: List[str]) -> str:
+    """
+    Joins a list of command arguments into a single shell-escaped string.
+
+    Args:
+        args: A list of command arguments.
+
+    Returns:
+        A shell-escaped string suitable for execution or display.
+    """
     return " ".join(shlex.quote(a) for a in args)
 
 
 def format_args_multiline(args: List[str], joiner: str) -> str:
+    """
+    Formats a list of command-line arguments into a multiline string for better readability.
+    Groups options (e.g., --flag) with their corresponding values.
+
+    Args:
+        args: A list of command-line arguments.
+        joiner: The string used to join the formatted lines.
+
+    Returns:
+        A formatted, multiline string representation of the arguments.
+    """
     lines = []
     i = 0
     while i < len(args):
@@ -60,6 +99,15 @@ def format_args_multiline(args: List[str], joiner: str) -> str:
 
 
 def fetch_hf_config(model: str) -> Optional[Dict]:
+    """
+    Fetches the config.json for a specified model from the Hugging Face Hub.
+
+    Args:
+        model: The Hugging Face model identifier (e.g., 'meta-llama/Llama-2-7b-hf').
+
+    Returns:
+        A dictionary containing the parsed JSON configuration if successful, otherwise None.
+    """
     url = f"https://huggingface.co/{model}/resolve/main/config.json"
     headers = {"User-Agent": "llm-d-pipeline-validator"}
 
@@ -86,6 +134,16 @@ def fetch_hf_config(model: str) -> Optional[Dict]:
 
 
 def is_moe_model(model: str, config: Optional[Dict]) -> bool:
+    """
+    Determines if a model is a Mixture of Experts (MoE) architecture based on its name or Hugging Face config.
+
+    Args:
+        model: The model name or identifier.
+        config: The optional Hugging Face configuration dictionary.
+
+    Returns:
+        True if the model is identified as an MoE, False otherwise.
+    """
     if config:
         moe_keys = [
             "num_experts_per_tok",
@@ -113,6 +171,15 @@ def is_moe_model(model: str, config: Optional[Dict]) -> bool:
 
 
 def get_hf_max_context(config: Optional[Dict]) -> Optional[int]:
+    """
+    Extracts the maximum context window size from a Hugging Face configuration dictionary.
+
+    Args:
+        config: The Hugging Face configuration dictionary.
+
+    Returns:
+        The maximum sequence length as an integer if found, otherwise None.
+    """
     if not config:
         return None
     for key in ["max_position_embeddings", "max_sequence_length", "seq_length"]:
@@ -122,6 +189,15 @@ def get_hf_max_context(config: Optional[Dict]) -> Optional[int]:
 
 
 def normalize_gpu_name(gpu: str) -> str:
+    """
+    Normalizes a GPU string identifier to a standard canonical name.
+
+    Args:
+        gpu: The raw GPU name string (e.g., 'a100-80g', 'RTX 4090').
+
+    Returns:
+        The normalized uppercase string representation.
+    """
     s = gpu.strip().lower().replace("-", "").replace("_", "").replace(" ", "")
     aliases = {
         "b200": "B200",
@@ -152,6 +228,15 @@ def normalize_gpu_name(gpu: str) -> str:
 
 
 def infer_gpu_memory_gb(gpu: str) -> Optional[int]:
+    """
+    Infers the estimated memory capacity in Gigabytes for a given GPU name.
+
+    Args:
+        gpu: The raw GPU name string.
+
+    Returns:
+        The integer memory size in GB if recognized, otherwise None.
+    """
     s = gpu.strip().lower().replace("-", "").replace("_", "").replace(" ", "")
     mapping = {
         "b200": 192,
@@ -184,6 +269,17 @@ def infer_gpu_memory_gb(gpu: str) -> Optional[int]:
 def parse_param_count_billions(
     model: str, config: Optional[Dict] = None
 ) -> Optional[float]:
+    """
+    Estimates the number of parameters in billions for a given model.
+    Attempts to parse from the model name first, then infers from the Hugging Face config.
+
+    Args:
+        model: The model name or identifier.
+        config: The optional Hugging Face configuration dictionary.
+
+    Returns:
+        The estimated parameter count in billions as a float, or None if it cannot be determined.
+    """
     # 1. Try regex on model string
     match = re.search(r"(\d+(?:\.\d+)?)\s*([bBmM])\b", model)
     if match:
@@ -237,6 +333,10 @@ def parse_param_count_billions(
 
 @dataclass
 class EstimateInputs:
+    """
+    Data class representing the input parameters required to run the llm-optimizer estimate command.
+    """
+
     model: str
     gpu: str
     num_gpus: int
@@ -250,6 +350,10 @@ class EstimateInputs:
 
 @dataclass
 class EstimateResult:
+    """
+    Data class representing the output and parsed metrics from an llm-optimizer estimate execution.
+    """
+
     returncode: int
     stdout: str
     stderr: str
@@ -257,6 +361,15 @@ class EstimateResult:
 
 
 def build_estimate_cmd(inp: EstimateInputs) -> List[str]:
+    """
+    Constructs the command-line arguments for the llm-optimizer estimate tool.
+
+    Args:
+        inp: An EstimateInputs instance containing the configuration.
+
+    Returns:
+        A list of strings representing the command and its arguments.
+    """
     cmd = [
         "llm-optimizer",
         "estimate",
@@ -281,6 +394,15 @@ def build_estimate_cmd(inp: EstimateInputs) -> List[str]:
 
 
 def parse_estimate_output(text: str) -> Dict[str, float]:
+    """
+    Parses the standard output from the llm-optimizer estimate command to extract key performance metrics.
+
+    Args:
+        text: The raw output text from the command.
+
+    Returns:
+        A dictionary mapping metric names (e.g., 'ttft_ms', 'output_tps') to their float values.
+    """
     metrics: Dict[str, float] = {}
     patterns = [
         (r"TTFT:\s*([0-9]+(?:\.[0-9]+)?)\s*ms", "ttft_ms"),
@@ -303,6 +425,16 @@ def parse_estimate_output(text: str) -> Dict[str, float]:
 
 
 def run_estimate(inp: EstimateInputs, timeout: int = 300) -> EstimateResult:
+    """
+    Executes the llm-optimizer estimate command and parses its output.
+
+    Args:
+        inp: The input parameters for the estimation.
+        timeout: Execution timeout in seconds.
+
+    Returns:
+        An EstimateResult instance containing the command output and parsed metrics.
+    """
     cmd = build_estimate_cmd(inp)
     p = run_cmd(cmd, timeout=timeout)
     combined = (p.stdout or "") + "\n" + (p.stderr or "")
@@ -322,6 +454,11 @@ def run_estimate(inp: EstimateInputs, timeout: int = 300) -> EstimateResult:
 
 @dataclass
 class CandidateConfig:
+    """
+    Data class representing a proposed vLLM configuration profile.
+    Contains the arguments, reasoning, tuning suggestions, and a corresponding guidellm command.
+    """
+
     name: str
     args: List[str]
     rationale: Dict[str, str]
@@ -332,6 +469,17 @@ class CandidateConfig:
 def detect_model_family(
     model: str, override: Optional[str], config: Optional[Dict]
 ) -> str:
+    """
+    Determines the broad model family to apply family-specific default configurations.
+
+    Args:
+        model: The model name or identifier.
+        override: An optional explicit family string provided by the user.
+        config: The Hugging Face configuration dictionary.
+
+    Returns:
+        A string representing the identified model family (e.g., 'gpt-oss', 'llama', 'qwen').
+    """
     if override:
         return override.lower()
 
@@ -350,6 +498,15 @@ def detect_model_family(
 
 
 def model_family_defaults(family: str) -> Dict[str, object]:
+    """
+    Provides default vLLM configuration biases based on the model family.
+
+    Args:
+        family: The identified model family string.
+
+    Returns:
+        A dictionary containing default settings for expert parallelism, remote code execution, and prefix caching.
+    """
     base = {
         "enable_expert_parallel_default": None,
         "trust_remote_code_default": True,
@@ -401,7 +558,24 @@ def infer_tp_pp_dp(
     hf_config: Optional[Dict],
     model_params_b_override: Optional[float] = None,
 ) -> Tuple[int, int, int]:
-    """Calculates optimal 3D Parallelism (TP, PP, DP) constrained by cluster topology."""
+    """
+    Calculates the optimal 3D Parallelism configuration (Tensor, Pipeline, and Data Parallelism)
+    constrained by cluster topology and memory requirements.
+
+    Args:
+        num_gpus: Total number of GPUs available.
+        num_nodes: Number of physical nodes.
+        model: The model name or identifier.
+        gpu: The GPU type/name.
+        dtype: Data type (e.g., 'float16', 'bfloat16').
+        quantization: Optional quantization scheme.
+        candidate: Target profile ('latency', 'throughput', or 'balanced').
+        hf_config: Optional Hugging Face configuration dictionary.
+        model_params_b_override: Optional explicit parameter count override in billions.
+
+    Returns:
+        A tuple of (tensor_parallel_size, pipeline_parallel_size, data_parallel_size).
+    """
     mem = infer_gpu_memory_gb(gpu)
     param_b = (
         model_params_b_override
@@ -457,6 +631,18 @@ def infer_tp_pp_dp(
 
 
 def choose_gpu_memory_utilization(gpu: str, total_ctx: int, candidate: str) -> float:
+    """
+    Heuristically determines the ideal gpu_memory_utilization fraction for vLLM based on
+    GPU VRAM, total context length, and the target performance profile.
+
+    Args:
+        gpu: The GPU type/name.
+        total_ctx: The total expected context window (input + output length).
+        candidate: Target profile ('latency', 'throughput', or 'balanced').
+
+    Returns:
+        A float value representing the suggested gpu_memory_utilization (e.g., 0.90).
+    """
     mem = infer_gpu_memory_gb(gpu)
     if mem is None:
         base = 0.90
@@ -494,6 +680,27 @@ def choose_max_num_seqs(
     hf_config: Optional[Dict],
     model_params_b_override: Optional[float],
 ) -> int:
+    """
+    Determines an appropriate value for max_num_seqs (batch size limit in requests) based on
+    hardware capacity, model size, and expected context length.
+
+    Args:
+        gpu: The GPU type/name.
+        num_gpus: Total number of GPUs.
+        tp: Tensor parallel size.
+        pp: Pipeline parallel size.
+        total_ctx: Total context length.
+        candidate: Target profile ('latency', 'throughput', or 'balanced').
+        est: Parsed metrics from llm-optimizer estimate.
+        model: The model name or identifier.
+        dtype: The data type.
+        quantization: Optional quantization scheme.
+        hf_config: Hugging Face config.
+        model_params_b_override: Explicit parameter override.
+
+    Returns:
+        The suggested maximum number of concurrent sequences.
+    """
     mem = infer_gpu_memory_gb(gpu)
 
     if (mem or 0) >= 80 and num_gpus >= 4:
@@ -547,6 +754,19 @@ def choose_max_num_seqs(
 def choose_max_num_batched_tokens(
     gpu: str, num_gpus: int, total_ctx: int, candidate: str
 ) -> int:
+    """
+    Determines an optimal max_num_batched_tokens value (for chunked prefill)
+    based on hardware capacity and the target optimization profile.
+
+    Args:
+        gpu: The GPU type/name.
+        num_gpus: Total number of GPUs.
+        total_ctx: Total context length.
+        candidate: Target profile ('latency', 'throughput', or 'balanced').
+
+    Returns:
+        The suggested max_num_batched_tokens integer value.
+    """
     mem = infer_gpu_memory_gb(gpu)
     if (mem or 0) >= 80:
         base = 4096
@@ -563,12 +783,31 @@ def choose_max_num_batched_tokens(
 
 
 def choose_stream_interval(candidate: str, prefer_streaming_smoothness: bool) -> int:
+    """
+    Chooses the stream interval for token generation responses.
+
+    Args:
+        candidate: Target profile ('latency', 'throughput', or 'balanced').
+        prefer_streaming_smoothness: Flag to force a stream interval of 1 for smooth text generation.
+
+    Returns:
+        The suggested stream_interval integer.
+    """
     if prefer_streaming_smoothness:
         return 1
     return {"latency": 1, "balanced": 5, "throughput": 10}[candidate]
 
 
 def choose_prefill_partials(candidate: str) -> Tuple[int, int]:
+    """
+    Selects parameters for partial prefill scheduling to balance prompt processing vs generation.
+
+    Args:
+        candidate: Target profile ('latency', 'throughput', or 'balanced').
+
+    Returns:
+        A tuple of (max_num_partial_prefills, max_long_partial_prefills).
+    """
     return {
         "latency": (2, 1),
         "balanced": (4, 1),
@@ -577,6 +816,16 @@ def choose_prefill_partials(candidate: str) -> Tuple[int, int]:
 
 
 def choose_async_scheduling(candidate: str, strict_ttft: bool) -> bool:
+    """
+    Decides whether async scheduling should be enabled based on the target profile and latency constraints.
+
+    Args:
+        candidate: Target profile ('latency', 'throughput', or 'balanced').
+        strict_ttft: Whether strict Time-To-First-Token constraints are present.
+
+    Returns:
+        A boolean indicating whether to enable async scheduling.
+    """
     if strict_ttft and candidate == "latency":
         return False
     return candidate in ("balanced", "throughput")
@@ -588,6 +837,19 @@ def choose_max_model_len(
     output_len: int,
     hf_max_ctx: Optional[int],
 ) -> int:
+    """
+    Computes a practical max_model_len constraint based on requested input/output sizes and model limits,
+    snapping to power-of-two boundaries for better cache efficiency where possible.
+
+    Args:
+        user_value: Explicit user-provided max_model_len override.
+        input_len: Expected maximum input length.
+        output_len: Expected maximum output length.
+        hf_max_ctx: Model's native maximum context window from its config.
+
+    Returns:
+        The suggested max_model_len limit.
+    """
     if user_value:
         return user_value
 
@@ -607,6 +869,15 @@ def choose_max_model_len(
 
 
 def parse_constraints_for_ttft(constraints: Optional[str]) -> bool:
+    """
+    Checks if Time-To-First-Token (TTFT) constraints are explicitly specified in the user constraints string.
+
+    Args:
+        constraints: The raw constraints string.
+
+    Returns:
+        True if a TTFT constraint is detected, False otherwise.
+    """
     return bool(constraints and "ttft" in constraints.lower())
 
 
@@ -617,12 +888,25 @@ def parse_constraints_for_ttft(constraints: Optional[str]) -> bool:
 
 @dataclass
 class ValidationIssue:
+    """
+    Data class representing a detected configuration or feasibility issue.
+    """
+
     level: str
     code: str
     message: str
 
 
 def normalize_quantization(q: Optional[str]) -> Optional[str]:
+    """
+    Normalizes a quantization string identifier to a standard canonical name.
+
+    Args:
+        q: The raw quantization string (e.g., '8bit', 'awq', 'float16').
+
+    Returns:
+        The normalized quantization string, or None if none was provided.
+    """
     if not q:
         return None
     s = q.strip().lower()
@@ -645,6 +929,17 @@ def normalize_quantization(q: Optional[str]) -> Optional[str]:
 
 
 def effective_bytes_per_param(dtype: str, quantization: Optional[str]) -> float:
+    """
+    Estimates the effective number of bytes required per model parameter
+    based on the data type and quantization scheme.
+
+    Args:
+        dtype: The raw data type string.
+        quantization: Optional quantization scheme.
+
+    Returns:
+        A float representing the effective bytes per parameter (e.g., 2.0 for fp16, 0.5 for int4).
+    """
     q = normalize_quantization(quantization)
     if q == "int4":
         return 0.5
@@ -666,6 +961,18 @@ def effective_bytes_per_param(dtype: str, quantization: Optional[str]) -> float:
 def estimate_weight_memory_gb(
     param_b: Optional[float], dtype: str, quantization: Optional[str]
 ) -> Optional[float]:
+    """
+    Estimates the total memory required to load the model weights in Gigabytes,
+    including a small overhead factor.
+
+    Args:
+        param_b: The number of model parameters in billions.
+        dtype: The data type.
+        quantization: Optional quantization scheme.
+
+    Returns:
+        The estimated memory in GB, or None if parameters count is unknown.
+    """
     if param_b is None:
         return None
     bpp = effective_bytes_per_param(dtype, quantization)
@@ -691,6 +998,30 @@ def validate_feasibility(
     hf_max_ctx: Optional[int],
     model_params_b_override: Optional[float] = None,
 ) -> List[ValidationIssue]:
+    """
+    Performs comprehensive feasibility checks on the proposed configuration,
+    verifying hardware limits, context capacities, and distributed topology constraints.
+
+    Args:
+        model: Model identifier.
+        family: Model family.
+        gpu: GPU type.
+        num_gpus: Total number of GPUs.
+        num_nodes: Total number of nodes.
+        input_len: Expected input token length.
+        output_len: Expected output token length.
+        dtype: Data type.
+        quantization: Optional quantization string.
+        tp: Tensor parallel size.
+        pp: Pipeline parallel size.
+        max_model_len: Configured max model length.
+        hf_config: Hugging Face configuration dictionary.
+        hf_max_ctx: Extracted max context from Hugging Face config.
+        model_params_b_override: Override for model parameter count.
+
+    Returns:
+        A list of ValidationIssue objects containing errors, warnings, or info messages.
+    """
     issues: List[ValidationIssue] = []
 
     if num_gpus < 1:
@@ -893,6 +1224,36 @@ def build_candidate_config(
     hf_config: Optional[Dict],
     model_params_b: Optional[float] = None,
 ) -> CandidateConfig:
+    """
+    Constructs a complete vLLM candidate configuration profile, detailing CLI arguments,
+    the rationale behind them, and providing a test command using guidellm.
+
+    Args:
+        candidate_name: Target profile name ('latency', 'throughput', or 'balanced').
+        model: Model identifier.
+        family: Detected model family.
+        gpu: GPU type.
+        num_gpus: Total number of GPUs available.
+        num_nodes: Total number of compute nodes.
+        input_len: Expected average input sequence length.
+        output_len: Expected average output sequence length.
+        constraints: User-provided latency constraints.
+        estimate_metrics: Parsed performance metrics from the llm-optimizer.
+        chat_template: Optional path to a Jinja chat template.
+        dtype: Preferred model data type.
+        quantization: Optional quantization scheme.
+        trust_remote_code: Whether to allow remote code execution from HF Hub.
+        max_model_len_override: Optional explicit override for max_model_len.
+        include_cuda_graph_sizes: Flag to inject small CUDA graph sizes.
+        expect_shared_prefix: Flag indicating high shared prefix rates.
+        prefer_streaming_smoothness: Flag to optimize for smooth token delivery.
+        enable_expert_parallel_override: Force enable/disable MoE expert parallelism.
+        hf_config: The Hugging Face config payload.
+        model_params_b: Override for the parameter count.
+
+    Returns:
+        A populated CandidateConfig instance representing the profile.
+    """
     total_ctx = input_len + output_len
     fam_defaults = model_family_defaults(family)
     hf_max_ctx = get_hf_max_context(hf_config)
@@ -1132,6 +1493,12 @@ def build_candidate_config(
 
 
 def print_issues(issues: List[ValidationIssue]) -> None:
+    """
+    Prints a formatted list of validation issues (errors, warnings, infos) to the console.
+
+    Args:
+        issues: A list of ValidationIssue instances.
+    """
     print("\n=== Validation checks ===")
     if not issues:
         print("No obvious feasibility issues detected.")
@@ -1144,6 +1511,13 @@ def print_issues(issues: List[ValidationIssue]) -> None:
 
 
 def print_candidate(candidate: CandidateConfig) -> None:
+    """
+    Displays a candidate configuration profile in a human-readable format,
+    including Bash and OpenShift YAML formats, plus its rationale.
+
+    Args:
+        candidate: The CandidateConfig instance to display.
+    """
     bash_args = format_args_multiline(candidate.args, " \\\n  ")
     yaml_args = format_args_multiline(candidate.args, "\n      ")
 
@@ -1171,6 +1545,18 @@ def write_json_report(
     issues: List[ValidationIssue],
     candidates: List[CandidateConfig],
 ) -> None:
+    """
+    Dumps all input details, estimation results, validation checks, and generated candidates
+    into a structured JSON file.
+
+    Args:
+        path: Destination file path.
+        inputs: Original user input arguments.
+        estimate: Results from llm-optimizer execution.
+        family: Identified model family.
+        issues: Any detected feasibility issues.
+        candidates: A list of the generated candidate configurations.
+    """
     payload = {
         "inputs": inputs,
         "model_family": family,
@@ -1205,6 +1591,12 @@ def write_json_report(
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """
+    Builds the argparse parser for the script's command-line interface.
+
+    Returns:
+        An argparse.ArgumentParser instance.
+    """
     p = argparse.ArgumentParser(
         description="Generate 3 starting vLLM configs from llm-optimizer estimate + model presets (no benchmark)."
     )
@@ -1276,6 +1668,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """
+    Main entry point for the script. Orchestrates argument parsing, model family detection,
+    llm-optimizer execution, configuration candidate generation, feasibility checks,
+    and output rendering.
+
+    Returns:
+        Integer exit code (0 for success, non-zero for error/failure).
+    """
     if not which("llm-optimizer"):
         print("ERROR: llm-optimizer not found in PATH", file=sys.stderr)
         return 2
