@@ -15,6 +15,7 @@ from huggingface_hub import hf_hub_download
 @dataclass
 class ModelConfig:
     """Model configuration data structure."""
+
     num_params: int  # actual number of parameters
     num_layers: int
     hidden_dim: int
@@ -49,15 +50,15 @@ def get_precision_bytes_per_param(precision: str) -> int:
     }
 
     if precision not in precision_map:
-        raise ValueError(f"Unsupported precision: {precision}. Use {list(precision_map.keys())}")
+        raise ValueError(
+            f"Unsupported precision: {precision}. Use {list(precision_map.keys())}"
+        )
 
     return precision_map[precision]
 
 
 def calculate_model_memory_bytes(
-    model_config: ModelConfig,
-    precision: str,
-    safety_factor: float = 1.0
+    model_config: ModelConfig, precision: str, safety_factor: float = 1.0
 ) -> int:
     """
     Calculate model memory usage in bytes.
@@ -72,8 +73,11 @@ def calculate_model_memory_bytes(
     """
 
     from llm_optimizer.resources import ModelMemoryCalculator
+
     memory_calculator = ModelMemoryCalculator()
-    model_memory_bytes = memory_calculator.calculate_model_memory(model_config, precision)
+    model_memory_bytes = memory_calculator.calculate_model_memory(
+        model_config, precision
+    )
     return int(model_memory_bytes * safety_factor)
 
 
@@ -81,7 +85,7 @@ def calculate_min_tensor_parallel_size(
     model_config: ModelConfig,
     gpu_specs: dict,
     precision: str,
-    safety_factor: float = 1.2
+    safety_factor: float = 1.2,
 ) -> int:
     """
     Calculate minimum tensor parallel size needed to fit model.
@@ -95,7 +99,9 @@ def calculate_min_tensor_parallel_size(
     Returns:
         Minimum tensor parallel size
     """
-    model_memory_bytes = calculate_model_memory_bytes(model_config, precision, safety_factor)
+    model_memory_bytes = calculate_model_memory_bytes(
+        model_config, precision, safety_factor
+    )
     single_gpu_vram_bytes = int(gpu_specs["VRAM_GB"] * 1024**3)
 
     min_tp_size = max(1, int(model_memory_bytes // single_gpu_vram_bytes) + 1)
@@ -107,7 +113,7 @@ def generate_parameter_range(
     num_values: int = 3,
     variation_factor: float = 0.5,
     min_val: int = 1,
-    max_val: Optional[int] = None
+    max_val: Optional[int] = None,
 ) -> list[int]:
     """
     Generate a range of parameter values around an optimal value.
@@ -164,7 +170,9 @@ def generate_parameter_range(
     return values[:num_values]
 
 
-def generate_tp_dp_combinations(num_gpus: int, min_tp_size: int = 1) -> list[tuple[int, int]]:
+def generate_tp_dp_combinations(
+    num_gpus: int, min_tp_size: int = 1
+) -> list[tuple[int, int]]:
     """
     Generate tensor parallel (TP) and data parallel (DP) combinations.
 
@@ -247,7 +255,7 @@ def get_safetensor_total_size(model_id: str) -> Optional[int]:
         files = list_repo_files(repo_id=model_id)
 
         # Find all safetensor files
-        safetensor_files = [f for f in files if f.endswith('.safetensors')]
+        safetensor_files = [f for f in files if f.endswith(".safetensors")]
 
         if not safetensor_files:
             return None
@@ -258,14 +266,16 @@ def get_safetensor_total_size(model_id: str) -> Optional[int]:
             try:
                 # Download just the file info to get size
                 from huggingface_hub import get_hf_file_metadata, hf_hub_url
+
                 url = hf_hub_url(repo_id=model_id, filename=file_path)
                 metadata = get_hf_file_metadata(url)
 
-                if hasattr(metadata, 'size') and metadata.size:
+                if hasattr(metadata, "size") and metadata.size:
                     total_size += metadata.size
                 else:
                     # Fallback: try to get size from repo info
                     from huggingface_hub import repo_info
+
                     info = repo_info(repo_id=model_id)
                     if info.siblings:
                         for sibling in info.siblings:
@@ -355,12 +365,16 @@ def infer_precision_from_config(config: dict, model_id: str = None) -> str:
                 "compressed-tensors",
                 "fp8",
                 "float8",
-                "e4m3", "e5m2",  # FP8 formats
+                "e4m3",
+                "e5m2",  # FP8 formats
                 "fbgemm_fp8",
-                "float-quantized"
+                "float-quantized",
             ]
 
-            if any(indicator in quant_method or indicator in format_name for indicator in fp8_indicators):
+            if any(
+                indicator in quant_method or indicator in format_name
+                for indicator in fp8_indicators
+            ):
                 return "fp8"
 
             # Check for bit configuration indicating FP8
@@ -381,8 +395,12 @@ def infer_precision_from_config(config: dict, model_id: str = None) -> str:
                         weights = group_config.get("weights", {})
 
                         # Check if both weights and activations use 8-bit
-                        if (isinstance(input_acts, dict) and input_acts.get("num_bits") == 8 and
-                            isinstance(weights, dict) and weights.get("num_bits") == 8):
+                        if (
+                            isinstance(input_acts, dict)
+                            and input_acts.get("num_bits") == 8
+                            and isinstance(weights, dict)
+                            and weights.get("num_bits") == 8
+                        ):
                             return "fp8"
 
     # Check model ID/name for precision hints (high priority)
@@ -405,7 +423,7 @@ def infer_precision_from_config(config: dict, model_id: str = None) -> str:
             "bfloat16": "bf16",
             "torch.float16": "fp16",
             "torch.bfloat16": "bf16",
-            "fp8": "fp8"
+            "fp8": "fp8",
         }
         if torch_dtype in dtype_mapping:
             return dtype_mapping[torch_dtype]
@@ -485,15 +503,25 @@ def get_model_config_and_precision_from_hf(model_id: str) -> ModelConfig:
         )
 
     try:
+        # Resolve config if it is nested (e.g. Qwen-VL model structures)
+        text_config = config.get("text_config", config)
+
         # Extract basic config parameters
-        h = config["hidden_size"]
-        n_layers = config["num_hidden_layers"]
-        v = config["vocab_size"]
-        n_heads = config.get("num_attention_heads", 0)
-        n_kv_heads = config.get("num_key_value_heads", n_heads)
+        h = text_config["hidden_size"]
+        n_layers = text_config["num_hidden_layers"]
+        v = text_config["vocab_size"]
+        n_heads = text_config.get("num_attention_heads", 0)
+        n_kv_heads = text_config.get("num_key_value_heads", n_heads)
 
         # Calculate total parameters using the dedicated function
-        total_params = calculate_model_parameters_from_config(config)
+        total_params = calculate_model_parameters_from_config(text_config)
+
+        # Vision-Language models often have a massive vision encoder not captured in text_config.
+        # So we also add the parameters from the vision config if it exists.
+        if "vision_config" in config:
+            total_params += calculate_model_parameters_from_config(
+                config["vision_config"]
+            )
 
         # Infer precision from config and model ID
         precision = infer_precision_from_config(config, model_id)
@@ -512,4 +540,3 @@ def get_model_config_and_precision_from_hf(model_id: str) -> ModelConfig:
 
     except KeyError as e:
         raise KeyError(f"Could not find required key {e} in config.json for {model_id}")
-
