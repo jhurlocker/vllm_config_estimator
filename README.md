@@ -51,8 +51,8 @@ This repository contains a production-ready `Dockerfile` specifically configured
 - `vllm_start_config_from_estimate.py`: The core mathematical and logical engine. This script hooks into Hugging Face to inspect model structures (`config.json`), calculates hardware feasibility, designs 3D Parallelism topologies (TP, PP, DP), and emits the three candidate profiles (latency, throughput, balanced).
 - `app.py`: A lightweight Flask server that exposes the Python script's functionality via a REST API (`/estimate`). It handles parsing form data, executing the script safely with timeouts, and returning the structured JSON payload.
 - `templates/index.html`: The frontend user interface. It provides a clean, user-friendly form with advanced toggles, dynamically renders the JSON responses into tabulated profiles, and surfaces critical alerts or hardware warnings.
+- `vllm_estimate_json_viewer.html`: A standalone, client-side web viewer. It allows users to upload a generated JSON report to visualize metrics, errors, and configuration profiles cleanly outside of the main application.
 - `src/`: The core `llm-optimizer` source code which provides theoretical roofline analysis and arithmetic intensity bounds that inform the heuristics.
-- `generate_deck.py`: A utility script that utilizes `python-pptx` to programmatically generate a Google Slides/PowerPoint presentation explaining the tool's value and usage. 
 
 ## Advanced Usage & Overrides
 
