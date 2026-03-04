@@ -154,15 +154,15 @@
                     <input type="text" id="vllm_version_hint" name="vllm_version_hint" value="0.11.2" placeholder="e.g. 0.11.2">
                     <span class="help-text">Adjusts generated engine arguments to match the capabilities of this vLLM release.</span>
                 </div>
-
-                <div class="form-group checkbox-group">
-                    <input type="checkbox" id="expect_shared_prefix" name="expect_shared_prefix">
-                    <label for="expect_shared_prefix">Enable Prefix Caching (Good for Chat/RAG/Agents)</label>
-                </div>
                 
                 <div class="advanced-toggle" onclick="toggleAdvanced()">Advanced & Overrides</div>
                 <div id="advanced-settings" class="advanced-content">
-                    <div class="form-group">
+                    <div class="form-group checkbox-group" style="margin-top: 15px;">
+                        <input type="checkbox" id="expect_shared_prefix" name="expect_shared_prefix">
+                        <label for="expect_shared_prefix">Enable Prefix Caching (Good for Chat/RAG/Agents)</label>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 15px;">
                         <label for="constraints">Optimizer Constraints</label>
                         <input type="text" id="constraints" name="constraints" placeholder="e.g. ttft:p95<2s;itl:p95<50ms">
                         <span class="help-text">Filter output profiles against SLA constraints</span>
@@ -221,7 +221,10 @@
         </div>
 
         <div class="output-section">
-            <h3 class="section-title">Estimation Results</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;">
+                <h3 class="section-title" style="margin-bottom: 0;">Estimation Results</h3>
+                <button type="button" id="clearBtn" class="secondary" style="width: auto; margin-top: 0; padding: 5px 15px; background: #ecf0f1; color: #333; font-weight: normal;">Clear</button>
+            </div>
             <div id="loader" class="loader"></div>
             
             <div id="output-container" style="display: none;">
@@ -365,6 +368,24 @@
             
             return html;
         }
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            const outputContainer = document.getElementById('output-container');
+            const errorContainer = document.getElementById('error-container');
+            const initialState = document.getElementById('initial-state');
+            
+            outputContainer.style.display = 'none';
+            errorContainer.style.display = 'none';
+            initialState.style.display = 'block';
+            
+            // Clear contents
+            document.getElementById('issues-container').innerHTML = '';
+            document.getElementById('tab-balanced').innerHTML = '';
+            document.getElementById('tab-throughput').innerHTML = '';
+            document.getElementById('tab-latency').innerHTML = '';
+            document.getElementById('optimizer-stdout').innerText = '';
+            document.getElementById('raw-json').innerText = '';
+        });
 
         document.getElementById('estimateForm').addEventListener('submit', async (e) => {
             e.preventDefault();
