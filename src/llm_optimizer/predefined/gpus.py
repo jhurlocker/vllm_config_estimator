@@ -132,9 +132,15 @@ def get_precision_tflops(gpu_name: str, precision: str) -> float:
 
     if precision in ("fp16", "bf16"):
         return specs["FP16_TFLOPS"]
-    elif precision == "fp8":
-        if specs["FP8_TFLOPS"] is None:
-            raise ValueError(f"FP8 precision not supported on {gpu_name}")
-        return specs["FP8_TFLOPS"]
+    elif precision in ("fp8", "int8", "fp4", "int4"):
+        # For int8/int4/fp4 we fallback to FP8 TFLOPS or 2x FP16 if FP8 is missing
+        if specs.get("FP8_TFLOPS") is not None:
+            if precision in ("fp4", "int4"):
+                return specs["FP8_TFLOPS"] * 2.0
+            return specs["FP8_TFLOPS"]
+        else:
+            if precision in ("int8", "int4"):
+                return specs["FP16_TFLOPS"] * 2.0
+            raise ValueError(f"{precision} precision not supported on {gpu_name}")
     else:
-        raise ValueError(f"Unsupported precision: {precision}. Use 'fp16' or 'fp8'")
+        raise ValueError(f"Unsupported precision: {precision}")

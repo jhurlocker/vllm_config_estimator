@@ -135,8 +135,9 @@
                     <div class="form-group" style="flex: 1;">
                         <label for="quantization">Quantization (Optional)</label>
                         <select id="quantization" name="quantization">
-                            <option value="">None (Native)</option>
+                            <option value="">None (Native/Auto)</option>
                             <option value="fp8">FP8</option>
+                            <option value="fp4">FP4 (NVFP4)</option>
                             <option value="int8">INT8 (AWQ/GPTQ)</option>
                             <option value="int4">INT4 (AWQ/GPTQ)</option>
                         </select>
@@ -388,6 +389,43 @@
             document.getElementById('raw-json').innerText = '';
         });
 
+        
+        document.getElementById('model').addEventListener('blur', async (e) => {
+            const modelId = e.target.value.trim();
+            if (!modelId) return;
+            
+            const select = document.getElementById('quantization');
+            let inferredQuantization = '';
+            const modelIdLower = modelId.toLowerCase();
+            
+            // Initial fallback heuristic from name
+            if (modelIdLower.includes('fp4') || modelIdLower.includes('nvfp4')) {
+                inferredQuantization = 'fp4';
+            } else if (modelIdLower.includes('fp8')) {
+                inferredQuantization = 'fp8';
+            } else if (modelIdLower.includes('int4') || modelIdLower.includes('awq') || modelIdLower.includes('gptq')) {
+                inferredQuantization = 'int4';
+            } else if (modelIdLower.includes('int8')) {
+                inferredQuantization = 'int8';
+            }
+            
+            try {
+                // Fetch through backend proxy to leverage robust python logic and avoid CORS
+                const response = await fetch('/model_config?model=' + encodeURIComponent(modelId));
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    // If backend explicitly found a quantization, use it
+                    if (data.quantization !== undefined) {
+                        inferredQuantization = data.quantization;
+                    }
+                }
+            } catch (error) {
+                console.warn("Failed to fetch model config, relying on model name inference.", error);
+            }
+            
+            select.value = inferredQuantization;
+        });
         document.getElementById('estimateForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             

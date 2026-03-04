@@ -189,11 +189,16 @@ def calculate_memory_fraction(
 
 def get_precision_tflops(gpu_specs: dict, precision: str) -> float:
     """Get TFLOPS for the specified precision from GPU specs."""
-    if precision == "fp16" or precision == "bf16":
+    if precision in ("fp16", "bf16"):
         return gpu_specs["FP16_TFLOPS"]
-    elif precision == "fp8":
-        if gpu_specs["FP8_TFLOPS"] is None:
-            raise ValueError(f"FP8 not supported on this GPU architecture: {gpu_specs.get('Architecture', 'Unknown')}")
-        return gpu_specs["FP8_TFLOPS"]
+    elif precision in ("fp8", "int8", "fp4", "int4"):
+        if gpu_specs.get("FP8_TFLOPS") is not None:
+            if precision in ("fp4", "int4"):
+                return gpu_specs["FP8_TFLOPS"] * 2.0
+            return gpu_specs["FP8_TFLOPS"]
+        else:
+            if precision in ("int8", "int4"):
+                return gpu_specs["FP16_TFLOPS"] * 2.0
+            raise ValueError(f"{precision} not supported on this GPU architecture: {gpu_specs.get('Architecture', 'Unknown')}")
     else:
         raise ValueError(f"Unsupported precision: {precision}")

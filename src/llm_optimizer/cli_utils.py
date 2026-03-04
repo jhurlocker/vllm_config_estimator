@@ -327,7 +327,7 @@ def collect_interactive_parameters():
         inferred_precision = "fp16"
 
     precision = friendly_prompt(
-        "Model precision", default=inferred_precision, choices=["fp16", "bf16", "fp8"]
+        "Model precision", default=inferred_precision, choices=["fp16", "bf16", "fp8", "fp4", "int4", "int8"]
     )
 
     # Get framework

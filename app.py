@@ -1,5 +1,10 @@
 import os
+import sys
 import subprocess
+
+# Add src to python path for local development
+sys.path.insert(0, os.path.abspath("src"))
+
 import tempfile
 import json
 from flask import Flask, render_template, request, jsonify
@@ -11,6 +16,43 @@ app = Flask(__name__)
 def index():
     return render_template("index.html")
 
+
+@app.route("/model_config", methods=["GET"])
+def model_config():
+    """
+    Endpoint to fetch model quantization details from Hugging Face.
+    Uses llm_optimizer's robust inference to handle standard configs, native Mistral formats, and metadata tags.
+    """
+    model_id = request.args.get("model")
+    if not model_id:
+        return jsonify({"error": "No model specified"}), 400
+        
+    try:
+        from llm_optimizer.common import get_quantization_from_hub, infer_precision_from_config
+        from huggingface_hub import hf_hub_download
+        
+        # 1. Try to get precision from Hub metadata first (most reliable for Native Mistral and non-standard models)
+        precision = get_quantization_from_hub(model_id)
+        
+        # 2. If not found, download config.json and infer from it
+        if not precision:
+            try:
+                config_path = hf_hub_download(repo_id=model_id, filename="config.json")
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+                precision = infer_precision_from_config(config, model_id)
+            except Exception:
+                # If config.json fails, precision remains None
+                pass
+                
+        # Only return explicitly quantified formats to UI, otherwise return empty so UI snaps to "Native/Auto"
+        if precision in ["fp4", "fp8", "int4", "int8"]:
+            return jsonify({"quantization": precision})
+        else:
+            return jsonify({"quantization": ""})
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 404
 
 @app.route("/estimate", methods=["POST"])
 def estimate():

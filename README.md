@@ -4,6 +4,7 @@ A comprehensive, UI-driven tool powered by `llm-optimizer` designed to help user
 
 - **Automates the Math:** Takes the hardware availability, model architecture, and workload shape to calculate VRAM footprint instantly.
 - **HuggingFace Integration:** Automatically queries model architectures, expert counts (MoE), and context lengths from HF.
+- **Universal Quantization Detection:** Auto-detects precision (FP8, FP4, INT4, INT8, AWQ, GPTQ) intelligently by traversing `config.json`, Hugging Face repo tags, sibling files (like `.gguf`), and `ModelCard` text, gracefully supporting native architectures like Mistral (`params.json`).
 - **Profile Generation:** Yields 3 distinct operational profiles tailored for the customer's use case: Balanced, Min Latency, and Max Throughput.
 - **vLLM Version Awareness:** Dynamically adjusts suggested CLI arguments based on the target vLLM release, verifying arguments directly against the vLLM GitHub repository to prevent flags that don't exist in older/newer versions.
 - **Hardware & Network Aware:** Evaluates multi-node setups and flags network bottlenecks (e.g. warning if InfiniBand/RoCE is required for cross-node PP).
