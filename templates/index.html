@@ -149,6 +149,12 @@
                     <span class="help-text">Caps the KV cache allocation. Lowering this increases concurrency throughput.</span>
                 </div>
                 
+                <div class="form-group">
+                    <label for="vllm_version_hint">Target vLLM Version</label>
+                    <input type="text" id="vllm_version_hint" name="vllm_version_hint" value="0.11.2" placeholder="e.g. 0.11.2">
+                    <span class="help-text">Adjusts generated engine arguments to match the capabilities of this vLLM release.</span>
+                </div>
+
                 <div class="form-group checkbox-group">
                     <input type="checkbox" id="expect_shared_prefix" name="expect_shared_prefix">
                     <label for="expect_shared_prefix">Enable Prefix Caching (Good for Chat/RAG/Agents)</label>

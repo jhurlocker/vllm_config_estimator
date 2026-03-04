@@ -5,6 +5,7 @@ A comprehensive, UI-driven tool powered by `llm-optimizer` designed to help user
 - **Automates the Math:** Takes the hardware availability, model architecture, and workload shape to calculate VRAM footprint instantly.
 - **HuggingFace Integration:** Automatically queries model architectures, expert counts (MoE), and context lengths from HF.
 - **Profile Generation:** Yields 3 distinct operational profiles tailored for the customer's use case: Balanced, Min Latency, and Max Throughput.
+- **vLLM Version Awareness:** Dynamically adjusts suggested CLI arguments based on the target vLLM release, verifying arguments directly against the vLLM GitHub repository to prevent flags that don't exist in older/newer versions.
 - **Hardware & Network Aware:** Evaluates multi-node setups and flags network bottlenecks (e.g. warning if InfiniBand/RoCE is required for cross-node PP).
 - **Validation:** Provides active Out-of-Memory (OOM) protection by warning if a configuration is not physically feasible before you even touch a cluster.
 
@@ -57,6 +58,7 @@ This repository contains a production-ready `Dockerfile` specifically configured
 
 The UI provides an **Advanced & Overrides** section. These map directly to underlying python arguments to let you override heuristics:
 - **Optimizer Constraints:** (`--constraints`) Filter outputs against strict SLAs (e.g., `ttft:p95<2s;itl:p95<50ms`).
+- **Target vLLM Version:** (`--vllm-version-hint`) Defaults to 0.11.2. The tool reaches out to GitHub to parse the `arg_utils.py` for that specific release and trims out flags that are deprecated or unavailable.
 - **Model Family Preset:** (`--model-family`) Force a specific family's caching or architecture behavior instead of relying on auto-detection.
 - **Model Parameters (Billions):** (`--model-params-b`) If HuggingFace lookup fails, explicitly provide the parameter count (e.g. `70.5`) to allow VRAM calculation to succeed.
 - **Estimation Target:** (`--target`) Manually force `llm-optimizer` to optimize for `throughput` or `latency`.

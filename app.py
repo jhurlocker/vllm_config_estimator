@@ -50,6 +50,8 @@ def estimate():
         cmd.extend(["--dtype", str(data.get("dtype"))])
     if data.get("max_model_len"):
         cmd.extend(["--max-model-len", str(data.get("max_model_len"))])
+    if data.get("vllm_version_hint"):
+        cmd.extend(["--vllm-version-hint", str(data.get("vllm_version_hint"))])
 
     # Boolean arguments
     if "trust_remote_code" in data:

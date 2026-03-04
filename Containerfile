@@ -3,7 +3,8 @@ FROM python:3.10-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8080
+    PORT=8080 \
+    HF_HOME=/app/.cache/huggingface
 
 # Create application directory
 WORKDIR /app
@@ -27,7 +28,8 @@ COPY app.py vllm_start_config_from_estimate.py ./
 COPY templates/ ./templates/
 
 # OpenShift compatibility: Grant directory permissions to root group
-RUN chgrp -R 0 /app && \
+RUN mkdir -p /app/.cache/huggingface && \
+    chgrp -R 0 /app && \
     chmod -R g=u /app
 
 # Ensure non-root user for security (OpenShift requires arbitrary UIDs to have access)

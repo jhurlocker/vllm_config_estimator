@@ -405,6 +405,7 @@
         `Validation errors: ${errorCount}`,
         `Validation warnings: ${warnCount}`,
       ];
+      if (inputs.vllm_version_hint) chips.push(`vLLM Version: ${inputs.vllm_version_hint}`);
       if (inputs.quantization) chips.push(`Quantization: ${inputs.quantization}`);
       if (inputs.model_params_b) chips.push(`Params override: ${inputs.model_params_b}B`);
       chips.forEach(text => {

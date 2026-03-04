@@ -13,7 +13,7 @@ import urllib.request
 import urllib.error
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 
 
 # ============================================================
@@ -647,11 +647,11 @@ def choose_gpu_memory_utilization(gpu: str, total_ctx: int, candidate: str) -> f
     if mem is None:
         base = 0.90
     elif mem >= 80:
-        base = 0.90
+        base = 0.92
     elif mem >= 48:
-        base = 0.88
+        base = 0.90
     else:
-        base = 0.85
+        base = 0.88
 
     if total_ctx > 16000:
         base -= 0.02
@@ -659,11 +659,11 @@ def choose_gpu_memory_utilization(gpu: str, total_ctx: int, candidate: str) -> f
         base -= 0.01
 
     if candidate == "latency":
-        base -= 0.01
+        base -= 0.02
     elif candidate == "throughput":
-        base += 0.01
+        base += 0.03
 
-    return max(0.82, min(0.93, round(base, 2)))
+    return max(0.82, min(0.95, round(base, 2)))
 
 
 def choose_max_num_seqs(
@@ -980,6 +980,44 @@ def estimate_weight_memory_gb(
     return param_b * bpp * overhead_factor
 
 
+def fetch_valid_vllm_args(version: str) -> Optional[Set[str]]:
+    """
+    Fetches the valid CLI arguments for a specific vLLM version from GitHub.
+
+    Args:
+        version: The vLLM version string (e.g., '0.11.2', 'v0.10.0').
+
+    Returns:
+        A set of valid argument strings (e.g., {'--max-model-len', '--dtype'}),
+        or None if they could not be fetched.
+    """
+    if not version.startswith("v") and not version == "main":
+        version = f"v{version}"
+
+    files_to_check = [
+        "vllm/engine/arg_utils.py",
+        "vllm/entrypoints/openai/cli_args.py",
+    ]
+
+    all_args = set()
+    success = False
+
+    for f in files_to_check:
+        url = f"https://raw.githubusercontent.com/vllm-project/vllm/{version}/{f}"
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=5) as response:
+                content = response.read().decode("utf-8")
+                matches = re.findall(r"[\'\"](--[a-zA-Z0-9\-]+)[\'\"]", content)
+                for match in matches:
+                    all_args.add(match)
+                success = True
+        except Exception:
+            pass
+
+    return all_args if success else None
+
+
 def validate_feasibility(
     *,
     model: str,
@@ -997,6 +1035,8 @@ def validate_feasibility(
     hf_config: Optional[Dict],
     hf_max_ctx: Optional[int],
     model_params_b_override: Optional[float] = None,
+    candidate_args: Optional[List[str]] = None,
+    valid_vllm_args: Optional[Set[str]] = None,
 ) -> List[ValidationIssue]:
     """
     Performs comprehensive feasibility checks on the proposed configuration,
@@ -1028,7 +1068,20 @@ def validate_feasibility(
         issues.append(
             ValidationIssue("error", "NUM_GPUS_INVALID", "num_gpus must be >= 1")
         )
-        return issues
+    if candidate_args and valid_vllm_args:
+        for arg in candidate_args:
+            if arg.startswith("--"):
+                base_arg = arg.split("=")[0]
+                if base_arg not in valid_vllm_args:
+                    issues.append(
+                        ValidationIssue(
+                            "warning",
+                            "INVALID_ENGINE_ARG",
+                            f"Argument '{base_arg}' is not recognized in the target vLLM version.",
+                        )
+                    )
+
+    return issues
 
     if tp < 1:
         issues.append(
@@ -1200,6 +1253,27 @@ def validate_feasibility(
 # ============================================================
 
 
+def parse_vllm_version(ver_str: Optional[str]) -> Tuple[int, ...]:
+    """
+    Parses a vLLM version string into a tuple of integers for comparison.
+
+    Args:
+        ver_str: The version string (e.g., '0.11.2', 'v0.10.0').
+
+    Returns:
+        A tuple of parsed integer components.
+    """
+    if not ver_str:
+        return (0, 0, 0)
+    parts = []
+    for p in ver_str.lower().replace("v", "").split("."):
+        try:
+            parts.append(int(re.sub(r"\D", "", p)))
+        except ValueError:
+            parts.append(0)
+    return tuple(parts)
+
+
 def build_candidate_config(
     *,
     candidate_name: str,
@@ -1223,6 +1297,7 @@ def build_candidate_config(
     enable_expert_parallel_override: Optional[bool],
     hf_config: Optional[Dict],
     model_params_b: Optional[float] = None,
+    vllm_version_hint: str = "0.11.2",
 ) -> CandidateConfig:
     """
     Constructs a complete vLLM candidate configuration profile, detailing CLI arguments,
@@ -1384,25 +1459,35 @@ def build_candidate_config(
         f"{candidate_name} scheduler cap chosen as {max_num_seqs} to balance concurrency vs TTFT risk."
     )
 
-    args += ["--enable-chunked-prefill"]
-    rationale["--enable-chunked-prefill"] = (
-        "Enabled as a good default for mixed/long prompt handling."
-    )
+    v = parse_vllm_version(vllm_version_hint)
+
+    # Chunked prefill became default in v0.6.0. Before that, we must explicitly enable it.
+    if v < (0, 6, 0):
+        args += ["--enable-chunked-prefill"]
+        rationale["--enable-chunked-prefill"] = (
+            f"Enabled as a good default for mixed/long prompt handling (required for vLLM < 0.6.0)."
+        )
+    else:
+        # It's default in >= 0.6.0, but we can still emit it for clarity or let it be implicit.
+        # Let's keep it implicit for cleaner arguments if version is recent.
+        pass
 
     args += ["--max-num-batched-tokens", str(max_num_batched_tokens)]
     rationale["--max-num-batched-tokens"] = (
         f"Set to {max_num_batched_tokens} as the {candidate_name} chunk size limit."
     )
 
-    args += ["--max-num-partial-prefills", str(max_partial_prefills)]
-    rationale["--max-num-partial-prefills"] = (
-        f"Set to {max_partial_prefills} for {candidate_name} prefill scheduling."
-    )
+    # Partial prefill limits were introduced around v0.7.0.
+    if v >= (0, 7, 0):
+        args += ["--max-num-partial-prefills", str(max_partial_prefills)]
+        rationale["--max-num-partial-prefills"] = (
+            f"Set to {max_partial_prefills} for {candidate_name} prefill scheduling."
+        )
 
-    args += ["--max-long-partial-prefills", str(max_long_partial_prefills)]
-    rationale["--max-long-partial-prefills"] = (
-        f"Set to {max_long_partial_prefills} to limit long-prefill dominance in {candidate_name} profile."
-    )
+        args += ["--max-long-partial-prefills", str(max_long_partial_prefills)]
+        rationale["--max-long-partial-prefills"] = (
+            f"Set to {max_long_partial_prefills} to limit long-prefill dominance in {candidate_name} profile."
+        )
 
     if prefix_cache:
         args += ["--enable-prefix-caching"]
@@ -1414,10 +1499,15 @@ def build_candidate_config(
             "Not enabled by default for this profile/family without shared-prefix expectation."
         )
 
-    if async_sched:
+    # Async scheduling was added in recent versions (>= 0.6.0).
+    if async_sched and v >= (0, 6, 0):
         args += ["--async-scheduling"]
         rationale["--async-scheduling"] = (
             f"Enabled for {candidate_name} profile to improve throughput/ITL."
+        )
+    elif async_sched:
+        rationale["--async-scheduling"] = (
+            f"Disabled because vLLM version ({vllm_version_hint}) is too old to support async-scheduling."
         )
     else:
         rationale["--async-scheduling"] = (
@@ -1452,6 +1542,7 @@ def build_candidate_config(
         rate_type = "concurrency"
     elif candidate_name == "throughput":
         tuning_knobs = [
+            "`--kv-cache-dtype=fp8`: Highly recommended to reduce memory pressure and increase concurrent requests, assuming your hardware supports it (e.g., H100, L40S).",
             "`--max-num-seqs`: Increase to maximize batching efficiency, up to the limits of your KV cache.",
             "`--max-num-batched-tokens`: Increase to allow more prompt tokens to be processed in a single forward pass, heavily utilizing GPU compute.",
             "`--max-model-len`: If your workload doesn't need the full context window, decreasing this frees up significant KV cache for even higher concurrency.",
@@ -1461,9 +1552,13 @@ def build_candidate_config(
     else:
         tuning_knobs = [
             "`--max-num-seqs`: Tune up or down based on your SLA. Higher = better throughput, Lower = better latency.",
+            "`--kv-cache-dtype=fp8`: Consider using fp8 KV cache to reclaim memory and boost concurrency if hardware supports it.",
             "`--max-model-len`: Lowering this limits maximum request size but allows more simultaneous requests.",
-            "`--enable-chunked-prefill`: Toggling this off might improve small-prompt performance, but can severely penalize TTFT for concurrent requests if prompts are large.",
         ]
+        if v < (0, 6, 0):
+            tuning_knobs.append(
+                "`--enable-chunked-prefill`: Toggling this off might improve small-prompt performance, but can severely penalize TTFT for concurrent requests if prompts are large."
+            )
         rates_str = "1,8,32,64,128"
         rate_type = "concurrency"
 
@@ -1647,7 +1742,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-model-len", type=int, default=None)
     p.add_argument("--dtype", default="auto")
     p.add_argument(
-        "--vllm-version-hint", default=None, help="Optional vLLM version hint."
+        "--vllm-version-hint",
+        default="0.11.2",
+        help="Optional vLLM version hint. Defaults to 0.11.2.",
     )
 
     p.add_argument("--trust-remote-code", action="store_true", default=None)
@@ -1762,6 +1859,12 @@ def main() -> int:
     issues_set = set()
     issues = []
 
+    valid_vllm_args = (
+        fetch_valid_vllm_args(args.vllm_version_hint)
+        if args.vllm_version_hint
+        else None
+    )
+
     for c in candidates:
         c_tp = int(arg_value(c.args, "--tensor-parallel-size", "1") or "1")
         c_pp = int(arg_value(c.args, "--pipeline-parallel-size", "1") or "1")
@@ -1786,6 +1889,8 @@ def main() -> int:
             hf_config=hf_config,
             hf_max_ctx=get_hf_max_context(hf_config),
             model_params_b_override=args.model_params_b,
+            candidate_args=c.args,
+            valid_vllm_args=valid_vllm_args,
         )
 
         # Deduplicate issues
