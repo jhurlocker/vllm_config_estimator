@@ -58,7 +58,7 @@ def model_config():
         return jsonify({"error": str(e)}), 404
 
 
-@app.route("/model_config", methods=["GET"])
+@app.route("/estimate", methods=["POST"])
 def estimate():
     data = request.form
 
