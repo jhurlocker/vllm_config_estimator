@@ -133,20 +133,34 @@ def estimate():
 
         # Catch specific precision errors from stderr if the process failed but didn't crash hard
         # Note: We check stderr even if returncode is 0, because sometimes the tool prints a traceback but exits cleanly
-        if "precision not supported on" in result.stderr:
-            # Create a synthetic JSON response with the error so the UI renders it cleanly
-            response["json"] = {
-                "candidates": [],
-                "validation_issues": [
-                    {
-                        "level": "error",
-                        "code": "PRECISION_NOT_SUPPORTED",
-                        "message": result.stderr.strip().split("\n")[
-                            -1
-                        ],  # Get the last line
-                    }
-                ],
+        # We also check inside output_json because llm-optimizer might capture its own stderr into the JSON report
+
+        captured_stderr = result.stderr
+        if output_json and "llm_optimizer" in output_json:
+            captured_stderr += "\n" + output_json["llm_optimizer"].get("stderr", "")
+
+        if "precision not supported on" in captured_stderr:
+            issue = {
+                "level": "error",
+                "code": "PRECISION_NOT_SUPPORTED",
+                "message": "Precision error detected: check detailed logs.",
             }
+
+            # Try to extract the exact line
+            for line in captured_stderr.split("\n"):
+                if "precision not supported on" in line:
+                    issue["message"] = line.strip()
+                    break
+
+            # Inject into JSON response (create if missing, append if exists)
+            if response["json"] is None:
+                response["json"] = {"candidates": [], "validation_issues": []}
+
+            if "validation_issues" not in response["json"]:
+                response["json"]["validation_issues"] = []
+
+            response["json"]["validation_issues"].append(issue)
+
             # Force returncode to 1 so frontend knows it failed
             response["returncode"] = 1
 
