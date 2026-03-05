@@ -70,6 +70,9 @@
                 <div class="form-group">
                     <label for="model">Hugging Face Model ID</label>
                     <input type="text" id="model" name="model" required placeholder="e.g. meta-llama/Meta-Llama-3-8B-Instruct">
+                    <div id="model-link-container" style="display: none; margin-top: 5px; font-size: 0.85em;">
+                        <a id="model-link" href="#" target="_blank" rel="noopener noreferrer" style="color: #007bff; text-decoration: none;">View Model Card on Hugging Face ↗</a>
+                    </div>
                     <span class="help-text">We fetch the model config from Hugging Face automatically to verify constraints.</span>
                 </div>
                 
@@ -387,12 +390,34 @@
             document.getElementById('tab-latency').innerHTML = '';
             document.getElementById('optimizer-stdout').innerText = '';
             document.getElementById('raw-json').innerText = '';
+            
+            // Reset form fields
+            document.getElementById('estimateForm').reset();
+            
+            // Hide model link
+            const linkContainer = document.getElementById('model-link-container');
+            if (linkContainer) {
+                linkContainer.style.display = 'none';
+            }
         });
 
         
         document.getElementById('model').addEventListener('blur', async (e) => {
             const modelId = e.target.value.trim();
-            if (!modelId) return;
+            
+            const linkContainer = document.getElementById('model-link-container');
+            const modelLink = document.getElementById('model-link');
+            
+            if (!modelId) {
+                if (linkContainer) linkContainer.style.display = 'none';
+                return;
+            }
+            
+            // Update and show model card link
+            if (linkContainer && modelLink) {
+                modelLink.href = `https://huggingface.co/${modelId}`;
+                linkContainer.style.display = 'block';
+            }
             
             const select = document.getElementById('quantization');
             let inferredQuantization = '';
