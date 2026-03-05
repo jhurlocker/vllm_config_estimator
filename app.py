@@ -132,7 +132,8 @@ def estimate():
         }
 
         # Catch specific precision errors from stderr if the process failed but didn't crash hard
-        if result.returncode != 0 and "precision not supported on" in result.stderr:
+        # Note: We check stderr even if returncode is 0, because sometimes the tool prints a traceback but exits cleanly
+        if "precision not supported on" in result.stderr:
             # Create a synthetic JSON response with the error so the UI renders it cleanly
             response["json"] = {
                 "candidates": [],
@@ -146,6 +147,8 @@ def estimate():
                     }
                 ],
             }
+            # Force returncode to 1 so frontend knows it failed
+            response["returncode"] = 1
 
     except subprocess.TimeoutExpired:
         response = {
