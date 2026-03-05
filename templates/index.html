@@ -455,17 +455,25 @@
             validateGpuPrecision();
         });
 
-        async function validateGpuPrecision() {
-            const issuesContainer = document.getElementById('issues-container');
-            const precisionWarningId = 'precision-warning-dynamic';
-            let existingWarning = document.getElementById(precisionWarningId);
 
-            // Clear previous dynamic warnings
+        async function validateGpuPrecision() {
+            const gpu = document.getElementById('gpu').value;
+            const precision = document.getElementById('quantization').value;
+            const issuesContainer = document.getElementById('issues-container');
+            const outputContainer = document.getElementById('output-container');
+            const initialState = document.getElementById('initial-state');
+            const warningId = 'precision-warning-dynamic';
+            let existingWarning = document.getElementById(warningId);
+
             if (existingWarning) {
                 existingWarning.remove();
             }
 
             if (!gpu || !precision) {
+                if (issuesContainer.children.length === 0) {
+                    outputContainer.style.display = 'none';
+                    initialState.style.display = 'block';
+                }
                 return;
             }
 
@@ -474,11 +482,18 @@
                 const data = await response.json();
 
                 if (!data.supported) {
+                    outputContainer.style.display = 'block';
+                    initialState.style.display = 'none';
                     const warningDiv = document.createElement('div');
-                    warningDiv.id = precisionWarningId;
+                    warningDiv.id = warningId;
                     warningDiv.className = 'alert alert-warning';
-                    warningDiv.innerHTML = `<strong>Warning:</strong> ${data.message}`;
+                    warningDiv.innerHTML = `<strong>Hardware Warning:</strong> ${data.message}`;
                     issuesContainer.appendChild(warningDiv);
+                } else {
+                    if (issuesContainer.children.length === 0) {
+                        outputContainer.style.display = 'none';
+                        initialState.style.display = 'block';
+                    }
                 }
             } catch (error) {
                 console.error("Precision validation check failed:", error);
@@ -502,10 +517,13 @@
             submitBtn.disabled = true;
             submitBtn.innerText = "Estimating...";
             initialState.style.display = 'none';
-            outputContainer.style.display = 'none';
+            outputContainer.style.display = 'block'; // Ensure output container is visible for results
             errorContainer.style.display = 'none';
             loader.style.display = 'block';
 
+            // Clear previous results, but preserve the live precision warning
+            document.querySelectorAll('#issues-container > *:not(#precision-warning-dynamic)').forEach(e => e.remove());
+            
             const formData = new FormData(form);
 
             try {
@@ -523,35 +541,32 @@
                     const issuesContainer = document.getElementById('issues-container');
                     issuesContainer.innerHTML = '';
                     
-                     // Before rendering anything, check if the precision warning is already visible.
-                     const precisionWarning = document.getElementById('precision-warning');
-                     let hasPrecisionWarning = precisionWarning && precisionWarning.style.display !== 'none';
+                                 // Add validation issues from the backend
+            if (result.validation_issues && result.validation_issues.length > 0) {
+                result.validation_issues.forEach(issue => {
+                    const div = document.createElement('div');
+                    const levelClass = issue.level === 'error' ? 'alert-error' : (issue.level === 'warning' ? 'alert-warning' : 'alert-info');
+                    div.className = `alert ${levelClass}`;
+                    div.innerHTML = `<strong>${issue.level.toUpperCase()}: ${issue.code}</strong><br>${issue.message}`;
+                    issuesContainer.appendChild(div);
+                });
+            }
 
-                     if (result.validation_issues && result.validation_issues.length > 0) {
-                         let hasErrors = false;
-                         result.validation_issues.forEach(issue => {
-                             const div = document.createElement('div');
-                             const levelClass = issue.level === 'error' ? 'alert-error' : (issue.level === 'warning' ? 'alert-warning' : 'alert-info');
-                             if (issue.level === 'error') hasErrors = true;
-                             
-                             div.className = `alert ${levelClass}`;
-                             div.innerHTML = `<strong>${issue.level.toUpperCase()}: ${issue.code}</strong><br>${issue.message}`;
-                             issuesContainer.appendChild(div);
-                         });
-                         
-                         if (hasErrors) {
-                             const fatal = document.createElement('div');
-                             fatal.className = 'alert alert-error';
-                             fatal.innerHTML = '<strong>⚠️ FATAL FEASIBILITY ERRORS DETECTED.</strong> The configurations below are provided for reference but will likely fail to run (OOM) due to the constraints above.';
-                             issuesContainer.prepend(fatal);
-                         }
-                     }
-                     
-                     // Only show success if there are no validation issues and no precision warnings.
-                     const hasValidationIssues = issuesContainer.children.length > 0;
-                     if (!hasValidationIssues && !hasPrecisionWarning) {
-                         issuesContainer.innerHTML = '<div class="alert alert-success"><strong>✅ Success:</strong> Model configuration appears feasible on this hardware. No critical issues detected.</div>';
-                     }
+            // Add an error from llm-optimizer if it failed and has a message
+            if (data.llm_optimizer && data.llm_optimizer.stderr && data.llm_optimizer.returncode !== 0) {
+                const div = document.createElement('div');
+                div.className = 'alert alert-error';
+                // Extract the last, most relevant line of the error
+                const errorLines = data.llm_optimizer.stderr.trim().split('\n');
+                const errorMessage = errorLines[errorLines.length - 1];
+                div.innerHTML = `<strong>LLM Optimizer Error:</strong><br>${errorMessage}`;
+                issuesContainer.appendChild(div);
+            }
+            
+            // Now, after all potential issues have been rendered, check if the container is empty.
+            if (issuesContainer.children.length === 0) {
+                issuesContainer.innerHTML = '<div class="alert alert-success"><strong>✅ Success:</strong> Model configuration appears feasible on this hardware. No critical issues detected.</div>';
+            }
                     
                     // Render Candidates
                     result.candidates.forEach(c => {
