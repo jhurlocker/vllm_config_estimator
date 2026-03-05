@@ -145,10 +145,11 @@
                             <option value="int4">INT4 (AWQ/GPTQ)</option>
                         </select>
                     </div>
+<div id="precision-warning" class="alert alert-warning" style="display: none; margin-top: 10px;"></div>
                 </div>
-
-                <div class="form-group">
-                    <label for="max_model_len">Target Context Window Limit</label>
+ 
+                 <div class="form-group">
+                     <label for="max_model_len">Target Context Window Limit</label>
                     <input type="number" id="max_model_len" name="max_model_len" placeholder="e.g. 8192 (Leave empty to infer from model config)">
                     <span class="help-text">Caps the KV cache allocation. Lowering this increases concurrency throughput.</span>
                 </div>
@@ -450,7 +451,40 @@
             }
             
             select.value = inferredQuantization;
+            
+            // After setting the value, trigger validation
+            validateGpuPrecision();
         });
+
+        async function validateGpuPrecision() {
+            const gpu = document.getElementById('gpu').value;
+            const precision = document.getElementById('quantization').value;
+            const warningDiv = document.getElementById('precision-warning');
+
+            if (!gpu || !precision) {
+                warningDiv.style.display = 'none';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/validate_gpu_precision?gpu=${gpu}&precision=${precision}`);
+                const data = await response.json();
+
+                if (data.supported) {
+                    warningDiv.style.display = 'none';
+                } else {
+                    warningDiv.innerText = `Warning: ${data.message}`;
+                    warningDiv.style.display = 'block';
+                }
+            } catch (error) {
+                console.error("Precision validation check failed:", error);
+                warningDiv.style.display = 'none';
+            }
+        }
+
+        document.getElementById('gpu').addEventListener('change', validateGpuPrecision);
+        document.getElementById('quantization').addEventListener('change', validateGpuPrecision);
+
         document.getElementById('estimateForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             

@@ -26,14 +26,17 @@ def model_config():
     model_id = request.args.get("model")
     if not model_id:
         return jsonify({"error": "No model specified"}), 400
-        
+
     try:
-        from llm_optimizer.common import get_quantization_from_hub, infer_precision_from_config
+        from llm_optimizer.common import (
+            get_quantization_from_hub,
+            infer_precision_from_config,
+        )
         from huggingface_hub import hf_hub_download
-        
+
         # 1. Try to get precision from Hub metadata first (most reliable for Native Mistral and non-standard models)
         precision = get_quantization_from_hub(model_id)
-        
+
         # 2. If not found, download config.json and infer from it
         if not precision:
             try:
@@ -44,15 +47,39 @@ def model_config():
             except Exception:
                 # If config.json fails, precision remains None
                 pass
-                
+
         # Only return explicitly quantified formats to UI, otherwise return empty so UI snaps to "Native/Auto"
         if precision in ["fp4", "fp8", "int4", "int8"]:
             return jsonify({"quantization": precision})
         else:
             return jsonify({"quantization": ""})
-            
+
     except Exception as e:
         return jsonify({"error": str(e)}), 404
+
+
+@app.route("/validate_gpu_precision", methods=["GET"])
+def validate_gpu_precision():
+    """
+    Validates if a given GPU supports a specific precision.
+    """
+    gpu = request.args.get("gpu")
+    precision = request.args.get("precision")
+
+    # If precision is not selected or set to native, it's always "supported"
+    if not gpu or not precision or precision == "":
+        return jsonify({"supported": True})
+
+    try:
+        from llm_optimizer.predefined.gpus import get_precision_tflops
+
+        # This function will raise ValueError if the combo is not supported.
+        get_precision_tflops(gpu, precision)
+        return jsonify({"supported": True})
+    except ValueError as e:
+        # Return the specific error message from the library.
+        return jsonify({"supported": False, "message": str(e)})
+
 
 @app.route("/estimate", methods=["POST"])
 def estimate():
