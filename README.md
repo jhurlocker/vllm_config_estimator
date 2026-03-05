@@ -26,6 +26,18 @@ To run the web interface locally, you need Python installed on your machine.
    ```
 4. Open your web browser and navigate to `http://127.0.0.1:8080`
 
+Run with Podman
+
+1. ```bash
+   podman run -d --name vllm-estimator -p 8080:8080 quay.io/jhurlocker/vllm_config_estimator:latest
+   ```
+
+2. Open your web browser and navigate to `http://127.0.0.1:8080`
+
+3. ```bash
+   podman stop vllm-estimator
+   ```
+
 ## Deploying to OpenShift
 
 This repository contains a production-ready `Dockerfile` specifically configured to comply with OpenShift security constraints (running as an arbitrary non-root UID).
