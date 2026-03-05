@@ -126,26 +126,25 @@
                 <hr>
                 <h3 class="section-title">Optimization Directives</h3>
                 
-                <div style="display: flex; gap: 10px;">
-                    <div class="form-group" style="flex: 1;">
-                        <label for="dtype">Weights Data Type</label>
-                        <select id="dtype" name="dtype">
-                            <option value="auto">Auto</option>
-                            <option value="bfloat16">bfloat16</option>
-                            <option value="float16">float16</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="flex: 1;">
-                        <label for="quantization">Quantization (Optional)</label>
-                        <select id="quantization" name="quantization">
-                            <option value="">None (Native/Auto)</option>
-                            <option value="fp8">FP8</option>
-                            <option value="fp4">FP4 (NVFP4)</option>
-                            <option value="int8">INT8 (AWQ/GPTQ)</option>
-                            <option value="int4">INT4 (AWQ/GPTQ)</option>
-                        </select>
-                    </div>
-<div id="precision-warning" class="alert alert-warning" style="display: none; margin-top: 10px;"></div>
+<div style="display: flex; gap: 10px;">
+                     <div class="form-group" style="flex: 1;">
+                         <label for="dtype">Weights Data Type</label>
+                         <select id="dtype" name="dtype">
+                             <option value="auto">Auto</option>
+                             <option value="bfloat16">bfloat16</option>
+                             <option value="float16">float16</option>
+                         </select>
+                     </div>
+                     <div class="form-group" style="flex: 1;">
+                         <label for="quantization">Quantization (Optional)</label>
+                         <select id="quantization" name="quantization">
+                             <option value="">None (Native/Auto)</option>
+                             <option value="fp8">FP8</option>
+                             <option value="fp4">FP4 (NVFP4)</option>
+                             <option value="int8">INT8 (AWQ/GPTQ)</option>
+                             <option value="int4">INT4 (AWQ/GPTQ)</option>
+                         </select>
+                     </div>
                 </div>
  
                  <div class="form-group">
@@ -457,12 +456,16 @@
         });
 
         async function validateGpuPrecision() {
-            const gpu = document.getElementById('gpu').value;
-            const precision = document.getElementById('quantization').value;
-            const warningDiv = document.getElementById('precision-warning');
+            const issuesContainer = document.getElementById('issues-container');
+            const precisionWarningId = 'precision-warning-dynamic';
+            let existingWarning = document.getElementById(precisionWarningId);
+
+            // Clear previous dynamic warnings
+            if (existingWarning) {
+                existingWarning.remove();
+            }
 
             if (!gpu || !precision) {
-                warningDiv.style.display = 'none';
                 return;
             }
 
@@ -470,15 +473,15 @@
                 const response = await fetch(`/validate_gpu_precision?gpu=${gpu}&precision=${precision}`);
                 const data = await response.json();
 
-                if (data.supported) {
-                    warningDiv.style.display = 'none';
-                } else {
-                    warningDiv.innerText = `Warning: ${data.message}`;
-                    warningDiv.style.display = 'block';
+                if (!data.supported) {
+                    const warningDiv = document.createElement('div');
+                    warningDiv.id = precisionWarningId;
+                    warningDiv.className = 'alert alert-warning';
+                    warningDiv.innerHTML = `<strong>Warning:</strong> ${data.message}`;
+                    issuesContainer.appendChild(warningDiv);
                 }
             } catch (error) {
                 console.error("Precision validation check failed:", error);
-                warningDiv.style.display = 'none';
             }
         }
 
@@ -520,27 +523,35 @@
                     const issuesContainer = document.getElementById('issues-container');
                     issuesContainer.innerHTML = '';
                     
-                    if (result.validation_issues && result.validation_issues.length > 0) {
-                        let hasErrors = false;
-                        result.validation_issues.forEach(issue => {
-                            const div = document.createElement('div');
-                            const levelClass = issue.level === 'error' ? 'alert-error' : (issue.level === 'warning' ? 'alert-warning' : 'alert-info');
-                            if (issue.level === 'error') hasErrors = true;
-                            
-                            div.className = `alert ${levelClass}`;
-                            div.innerHTML = `<strong>${issue.level.toUpperCase()}: ${issue.code}</strong><br>${issue.message}`;
-                            issuesContainer.appendChild(div);
-                        });
-                        
-                        if (hasErrors) {
-                            const fatal = document.createElement('div');
-                            fatal.className = 'alert alert-error';
-                            fatal.innerHTML = '<strong>⚠️ FATAL FEASIBILITY ERRORS DETECTED.</strong> The configurations below are provided for reference but will likely fail to run (OOM) due to the constraints above.';
-                            issuesContainer.prepend(fatal);
-                        }
-                    } else {
-                        issuesContainer.innerHTML = '<div class="alert alert-success"><strong>✅ Success:</strong> Model configuration appears feasible on this hardware. No critical issues detected.</div>';
-                    }
+                     // Before rendering anything, check if the precision warning is already visible.
+                     const precisionWarning = document.getElementById('precision-warning');
+                     let hasPrecisionWarning = precisionWarning && precisionWarning.style.display !== 'none';
+
+                     if (result.validation_issues && result.validation_issues.length > 0) {
+                         let hasErrors = false;
+                         result.validation_issues.forEach(issue => {
+                             const div = document.createElement('div');
+                             const levelClass = issue.level === 'error' ? 'alert-error' : (issue.level === 'warning' ? 'alert-warning' : 'alert-info');
+                             if (issue.level === 'error') hasErrors = true;
+                             
+                             div.className = `alert ${levelClass}`;
+                             div.innerHTML = `<strong>${issue.level.toUpperCase()}: ${issue.code}</strong><br>${issue.message}`;
+                             issuesContainer.appendChild(div);
+                         });
+                         
+                         if (hasErrors) {
+                             const fatal = document.createElement('div');
+                             fatal.className = 'alert alert-error';
+                             fatal.innerHTML = '<strong>⚠️ FATAL FEASIBILITY ERRORS DETECTED.</strong> The configurations below are provided for reference but will likely fail to run (OOM) due to the constraints above.';
+                             issuesContainer.prepend(fatal);
+                         }
+                     }
+                     
+                     // Only show success if there are no validation issues and no precision warnings.
+                     const hasValidationIssues = issuesContainer.children.length > 0;
+                     if (!hasValidationIssues && !hasPrecisionWarning) {
+                         issuesContainer.innerHTML = '<div class="alert alert-success"><strong>✅ Success:</strong> Model configuration appears feasible on this hardware. No critical issues detected.</div>';
+                     }
                     
                     // Render Candidates
                     result.candidates.forEach(c => {
