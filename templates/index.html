@@ -450,58 +450,9 @@
             }
             
             select.value = inferredQuantization;
-            
-            // After setting the value, trigger validation
-            validateGpuPrecision();
         });
 
 
-        async function validateGpuPrecision() {
-            const gpu = document.getElementById('gpu').value;
-            const precision = document.getElementById('quantization').value;
-            const issuesContainer = document.getElementById('issues-container');
-            const outputContainer = document.getElementById('output-container');
-            const initialState = document.getElementById('initial-state');
-            const warningId = 'precision-warning-dynamic';
-            let existingWarning = document.getElementById(warningId);
-
-            if (existingWarning) {
-                existingWarning.remove();
-            }
-
-            if (!gpu || !precision) {
-                if (issuesContainer.children.length === 0) {
-                    outputContainer.style.display = 'none';
-                    initialState.style.display = 'block';
-                }
-                return;
-            }
-
-            try {
-                const response = await fetch(`/validate_gpu_precision?gpu=${gpu}&precision=${precision}`);
-                const data = await response.json();
-
-                if (!data.supported) {
-                    outputContainer.style.display = 'block';
-                    initialState.style.display = 'none';
-                    const warningDiv = document.createElement('div');
-                    warningDiv.id = warningId;
-                    warningDiv.className = 'alert alert-warning';
-                    warningDiv.innerHTML = `<strong>Hardware Warning:</strong> ${data.message}`;
-                    issuesContainer.appendChild(warningDiv);
-                } else {
-                    if (issuesContainer.children.length === 0) {
-                        outputContainer.style.display = 'none';
-                        initialState.style.display = 'block';
-                    }
-                }
-            } catch (error) {
-                console.error("Precision validation check failed:", error);
-            }
-        }
-
-        document.getElementById('gpu').addEventListener('change', validateGpuPrecision);
-        document.getElementById('quantization').addEventListener('change', validateGpuPrecision);
 
         document.getElementById('estimateForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -517,12 +468,13 @@
             submitBtn.disabled = true;
             submitBtn.innerText = "Estimating...";
             initialState.style.display = 'none';
-            outputContainer.style.display = 'block'; // Ensure output container is visible for results
+            outputContainer.style.display = 'none'; 
             errorContainer.style.display = 'none';
             loader.style.display = 'block';
 
-            // Clear previous results, but preserve the live precision warning
-            document.querySelectorAll('#issues-container > *:not(#precision-warning-dynamic)').forEach(e => e.remove());
+            // Clear previous results
+            const issuesContainer = document.getElementById('issues-container');
+            issuesContainer.innerHTML = '';
             
             const formData = new FormData(form);
 

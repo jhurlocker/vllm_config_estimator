@@ -58,30 +58,7 @@ def model_config():
         return jsonify({"error": str(e)}), 404
 
 
-@app.route("/validate_gpu_precision", methods=["GET"])
-def validate_gpu_precision():
-    """
-    Validates if a given GPU supports a specific precision.
-    """
-    gpu = request.args.get("gpu")
-    precision = request.args.get("precision")
-
-    # If precision is not selected or set to native, it's always "supported"
-    if not gpu or not precision or precision == "":
-        return jsonify({"supported": True})
-
-    try:
-        from llm_optimizer.predefined.gpus import get_precision_tflops
-
-        # This function will raise ValueError if the combo is not supported.
-        get_precision_tflops(gpu, precision)
-        return jsonify({"supported": True})
-    except ValueError as e:
-        # Return the specific error message from the library.
-        return jsonify({"supported": False, "message": str(e)})
-
-
-@app.route("/estimate", methods=["POST"])
+@app.route("/model_config", methods=["GET"])
 def estimate():
     data = request.form
 
@@ -153,6 +130,22 @@ def estimate():
             "returncode": result.returncode,
             "json": output_json,
         }
+
+        # Catch specific precision errors from stderr if the process failed but didn't crash hard
+        if result.returncode != 0 and "precision not supported on" in result.stderr:
+            # Create a synthetic JSON response with the error so the UI renders it cleanly
+            response["json"] = {
+                "candidates": [],
+                "validation_issues": [
+                    {
+                        "level": "error",
+                        "code": "PRECISION_NOT_SUPPORTED",
+                        "message": result.stderr.strip().split("\n")[
+                            -1
+                        ],  # Get the last line
+                    }
+                ],
+            }
 
     except subprocess.TimeoutExpired:
         response = {
