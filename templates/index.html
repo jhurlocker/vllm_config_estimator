@@ -486,6 +486,8 @@
                 
                 const data = await response.json();
                 
+
+                // Check if we have JSON data (standard path) or if we need to handle a specific error payload (synthetic path)
                 if (data.json) {
                     const result = data.json;
                     
@@ -493,40 +495,42 @@
                     const issuesContainer = document.getElementById('issues-container');
                     issuesContainer.innerHTML = '';
                     
-                                 // Add validation issues from the backend
-            if (result.validation_issues && result.validation_issues.length > 0) {
-                result.validation_issues.forEach(issue => {
-                    const div = document.createElement('div');
-                    const levelClass = issue.level === 'error' ? 'alert-error' : (issue.level === 'warning' ? 'alert-warning' : 'alert-info');
-                    div.className = `alert ${levelClass}`;
-                    div.innerHTML = `<strong>${issue.level.toUpperCase()}: ${issue.code}</strong><br>${issue.message}`;
-                    issuesContainer.appendChild(div);
-                });
-            }
+                    // Add validation issues from the backend (synthetic ones from app.py are injected here)
+                    if (result.validation_issues && result.validation_issues.length > 0) {
+                        result.validation_issues.forEach(issue => {
+                            const div = document.createElement('div');
+                            const levelClass = issue.level === 'error' ? 'alert-error' : (issue.level === 'warning' ? 'alert-warning' : 'alert-info');
+                            div.className = `alert ${levelClass}`;
+                            div.innerHTML = `<strong>${issue.level.toUpperCase()}: ${issue.code}</strong><br>${issue.message}`;
+                            issuesContainer.appendChild(div);
+                        });
+                    }
 
-            // Add an error from llm-optimizer if it failed and has a message
-            if (data.llm_optimizer && data.llm_optimizer.stderr && data.llm_optimizer.returncode !== 0) {
-                const div = document.createElement('div');
-                div.className = 'alert alert-error';
-                // Extract the last, most relevant line of the error
-                const errorLines = data.llm_optimizer.stderr.trim().split('\n');
-                const errorMessage = errorLines[errorLines.length - 1];
-                div.innerHTML = `<strong>LLM Optimizer Error:</strong><br>${errorMessage}`;
-                issuesContainer.appendChild(div);
-            }
-            
-            // Now, after all potential issues have been rendered, check if the container is empty.
-            if (issuesContainer.children.length === 0) {
-                issuesContainer.innerHTML = '<div class="alert alert-success"><strong>✅ Success:</strong> Model configuration appears feasible on this hardware. No critical issues detected.</div>';
-            }
+                    // Add an error from llm-optimizer if it failed and has a message (e.g. OOM or other crashes)
+                    if (result.llm_optimizer && result.llm_optimizer.stderr && result.llm_optimizer.returncode !== 0) {
+                        const div = document.createElement('div');
+                        div.className = 'alert alert-error';
+                        // Extract the last, most relevant line of the error
+                        const errorLines = result.llm_optimizer.stderr.trim().split('\n');
+                        const errorMessage = errorLines[errorLines.length - 1];
+                        div.innerHTML = `<strong>LLM Optimizer Error:</strong><br>${errorMessage}`;
+                        issuesContainer.appendChild(div);
+                    }
                     
-                    // Render Candidates
-                    result.candidates.forEach(c => {
-                        const tab = document.getElementById('tab-' + c.name);
-                        if (tab) {
-                            tab.innerHTML = renderCandidate(c);
-                        }
-                    });
+                    // Now, after all potential issues have been rendered, check if the container is empty.
+                    if (issuesContainer.children.length === 0) {
+                        issuesContainer.innerHTML = '<div class="alert alert-success"><strong>✅ Success:</strong> Model configuration appears feasible on this hardware. No critical issues detected.</div>';
+                    }
+                    
+                    // Render Candidates (if any)
+                    if (result.candidates && result.candidates.length > 0) {
+                        result.candidates.forEach(c => {
+                            const tab = document.getElementById('tab-' + c.name);
+                            if (tab) {
+                                tab.innerHTML = renderCandidate(c);
+                            }
+                        });
+                    }
                     
                     // Render LLM-Optimizer Output
                     if (result.llm_optimizer && result.llm_optimizer.stdout) {
