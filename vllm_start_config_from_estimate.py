@@ -1358,7 +1358,7 @@ def build_candidate_config(
     enable_expert_parallel_override: Optional[bool],
     hf_config: Optional[Dict],
     model_params_b: Optional[float] = None,
-    vllm_version_hint: str = "0.11.2",
+    vllm_version_hint: str = "0.13.0",
 ) -> CandidateConfig:
     """
     Constructs a complete vLLM candidate configuration profile, detailing CLI arguments,
@@ -1810,8 +1810,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dtype", default="auto")
     p.add_argument(
         "--vllm-version-hint",
-        default="0.11.2",
-        help="Optional vLLM version hint. Defaults to 0.11.2.",
+        default="0.13.0",
+        help="Optional vLLM version hint. Defaults to 0.13.0.",
     )
 
     p.add_argument("--trust-remote-code", action="store_true", default=None)

@@ -59,7 +59,7 @@ This repository contains a production-ready `Dockerfile` specifically configured
 
 The UI provides an **Advanced & Overrides** section. These map directly to underlying python arguments to let you override heuristics:
 - **Optimizer Constraints:** (`--constraints`) Filter outputs against strict SLAs (e.g., `ttft:p95<2s;itl:p95<50ms`).
-- **Target vLLM Version:** (`--vllm-version-hint`) Defaults to 0.11.2. The tool reaches out to GitHub to parse the `arg_utils.py` for that specific release and trims out flags that are deprecated or unavailable.
+- **Target vLLM Version:** (`--vllm-version-hint`) Defaults to 0.13.0. The tool reaches out to GitHub to parse the `arg_utils.py` for that specific release and trims out flags that are deprecated or unavailable.
 - **Model Family Preset:** (`--model-family`) Force a specific family's caching or architecture behavior instead of relying on auto-detection.
 - **Model Parameters (Billions):** (`--model-params-b`) If HuggingFace lookup fails, explicitly provide the parameter count (e.g. `70.5`) to allow VRAM calculation to succeed.
 - **Estimation Target:** (`--target`) Manually force `llm-optimizer` to optimize for `throughput` or `latency`.
