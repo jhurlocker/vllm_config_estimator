@@ -15,6 +15,12 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set
 
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
 
 # ============================================================
 # Utilities & Hugging Face Integration
@@ -342,9 +348,7 @@ def parse_param_count_billions(
             pass
 
     # 2. Try inferring from HF Config architecture hidden size / layers if available
-    # A very rough approximation for missing parameter sizes
     if config:
-        # If parameters count is explicitly stored somewhere (rare but possible)
         if "num_parameters" in config:
             return float(config["num_parameters"]) / 1e9
 
@@ -353,14 +357,11 @@ def parse_param_count_billions(
         vocab_size = config.get("vocab_size", 0)
 
         if hidden_size and num_layers:
-            # Dense model approximation: (12 * h^2) * L + (V * h)
-            # MoE model approximation is much harder without active experts count, but we can guess
             is_moe = is_moe_model(model, config)
             if is_moe:
                 num_experts = config.get(
                     "num_local_experts", config.get("moe_num_experts", 8)
                 )
-                # rough MoE param estimate (base dense + experts)
                 params = (
                     (12 * (hidden_size**2)) * num_layers * (num_experts * 0.5)
                 ) + (vocab_size * hidden_size)
@@ -636,16 +637,12 @@ def infer_tp_pp_dp(
     gpus_per_node = max(1, num_gpus // max(1, num_nodes))
 
     if mem is None or weights_gb is None:
-        # Fallback to pure TP if single node, or TP+PP if multi-node
         return gpus_per_node, num_nodes, 1
 
-    # Find the minimum number of GPUs required to fit the model weights + overhead
     min_shards = math.ceil(weights_gb / (mem * 0.85))
 
     valid_topologies = []
 
-    # Generate all valid TP/PP/DP combinations
-    # Rule 1: TP must not cross node boundaries
     for tp in range(1, gpus_per_node + 1):
         if gpus_per_node % tp != 0:
             continue
@@ -659,22 +656,18 @@ def infer_tp_pp_dp(
             dp = num_gpus // (tp * pp)
             valid_topologies.append((tp, pp, dp))
 
-    # If the model simply won't fit on the provided hardware, return max capacity
     if not valid_topologies:
         return gpus_per_node, num_nodes, 1
 
     if candidate == "latency":
-        # Prioritize compute speed: Maximize TP, then PP. Ignore DP.
         valid_topologies.sort(key=lambda x: (x[0], x[1]), reverse=True)
         return valid_topologies[0]
 
     elif candidate == "throughput":
-        # Prioritize replicas: Maximize DP. Use only as much TP/PP as strictly necessary.
         valid_topologies.sort(key=lambda x: (x[2], x[0]), reverse=True)
         return valid_topologies[0]
 
     else:
-        # Balanced: Sort by DP, find the middle ground
         valid_topologies.sort(key=lambda x: (x[2], x[0]))
         return valid_topologies[len(valid_topologies) // 2]
 
@@ -713,6 +706,39 @@ def choose_gpu_memory_utilization(gpu: str, total_ctx: int, candidate: str) -> f
         base += 0.03
 
     return max(0.82, min(0.95, round(base, 2)))
+
+
+def estimate_kv_cache_gb_per_seq(
+    hf_config: Optional[Dict],
+    total_ctx: int,
+    dtype: str,
+    quantization: Optional[str],
+    tp: int,
+) -> Optional[float]:
+    """
+    Dynamically estimates the KV cache memory footprint in GB for a single sequence.
+    """
+    if not hf_config:
+        return None
+
+    num_layers = hf_config.get("num_hidden_layers")
+    num_attention_heads = hf_config.get("num_attention_heads")
+
+    if not num_layers or not num_attention_heads:
+        return None
+
+    num_kv_heads = hf_config.get("num_key_value_heads", num_attention_heads)
+    hidden_size = hf_config.get("hidden_size", 4096)
+    head_dim = hf_config.get("head_dim", hidden_size // num_attention_heads)
+    bpp = effective_bytes_per_param(dtype, quantization)
+
+    # KV cache heads are distributed across Tensor Parallel replicas
+    kv_heads_per_shard = max(1, num_kv_heads // tp)
+
+    # Calculate bytes per token (2 accounts for both Key and Value tensors)
+    bytes_per_token = 2 * num_layers * kv_heads_per_shard * head_dim * bpp
+
+    return (bytes_per_token * total_ctx) / (1024**3)
 
 
 def choose_max_num_seqs(
@@ -759,11 +785,6 @@ def choose_max_num_seqs(
     else:
         base = 24
 
-    if total_ctx > 16000:
-        base = max(12, base // 2)
-    elif total_ctx > 8000:
-        base = max(16, int(base * 0.75))
-
     param_b = (
         model_params_b_override
         if model_params_b_override is not None
@@ -776,12 +797,24 @@ def choose_max_num_seqs(
         usable_vram_per_gpu = mem * 0.90
         kv_cache_budget = usable_vram_per_gpu - weights_per_gpu
 
-        if kv_cache_budget < 8.0:
+        kv_gb_per_seq = estimate_kv_cache_gb_per_seq(
+            hf_config, total_ctx, dtype, quantization, tp
+        )
+
+        if kv_gb_per_seq:
             if kv_cache_budget <= 0:
                 base = 4
             else:
-                safe_cap = max(4, int(kv_cache_budget * 3))
+                safe_cap = max(4, int(kv_cache_budget / kv_gb_per_seq))
                 base = min(base, safe_cap)
+        else:
+            # Fallback heuristic if HF config is entirely missing
+            if kv_cache_budget < 8.0:
+                if kv_cache_budget <= 0:
+                    base = 4
+                else:
+                    safe_cap = max(4, int(kv_cache_budget * 3))
+                    base = min(base, safe_cap)
 
     if candidate == "latency":
         base = max(4, int(base * 0.5))
@@ -905,28 +938,15 @@ def choose_max_model_len(
 
     required = input_len + output_len
 
-    # If the requirement is small, stick to standard 4096 / 8192 buckets for simplicity
-    if required <= 4096:
-        return 4096
-    if required <= 8192:
-        return 8192
-
-    # For large contexts, doubling (the old logic) is too expensive (e.g. 10k -> 32k).
-    # Instead, apply a 15% safety buffer for prompt variance.
-    target = int(required * 1.15)
-
-    # Snap to nearest 1024 to keep the number clean
-    remainder = target % 1024
+    # Trust user inputs exactly, but round up to the nearest 32 to align with standard vLLM KV block sizes.
+    target = required
+    remainder = target % 32
     if remainder:
-        target += 1024 - remainder
+        target += 32 - remainder
 
-    # Enforce model limits if known
     if hf_max_ctx:
         if target > hf_max_ctx:
             target = hf_max_ctx
-        # If the model limit is somehow smaller than the requirement,
-        # we must at least return the requirement (even if it might error at runtime,
-        # it's better than returning a value < input_len)
         if target < required:
             target = required
 
@@ -1079,14 +1099,10 @@ def fetch_valid_vllm_args(version: str) -> Optional[Set[str]]:
             with urllib.request.urlopen(req, timeout=5) as response:
                 content = response.read().decode("utf-8")
 
-                # 1. Match explicit string arguments like parser.add_argument("--foo")
                 matches = re.findall(r"[\'\"](--[a-zA-Z0-9\-]+)[\'\"]", content)
                 for match in matches:
                     all_args.add(match)
 
-                # 2. In older vLLM versions (like < 0.6.0), engine arguments were primarily defined
-                # as @dataclass fields which were then programmatically converted to CLI args.
-                # E.g. max_num_seqs: int = 256 -> --max-num-seqs
                 fields = re.findall(
                     r"^\s+([a-zA-Z0-9_]+)\s*:\s*[a-zA-Z0-9_\[\]\s,]+(?:=.*)?$",
                     content,
@@ -1143,6 +1159,8 @@ def validate_feasibility(
         hf_config: Hugging Face configuration dictionary.
         hf_max_ctx: Extracted max context from Hugging Face config.
         model_params_b_override: Override for model parameter count.
+        candidate_args: The list of arguments generated for the candidate.
+        valid_vllm_args: A set of valid arguments fetched from GitHub.
 
     Returns:
         A list of ValidationIssue objects containing errors, warnings, or info messages.
@@ -1196,15 +1214,14 @@ def validate_feasibility(
         )
 
     if tp > 1 and num_nodes > 1 and (tp * pp > num_gpus):
-        # Skip evaluating this specific check here, handled below
         pass
     elif tp > 1 and num_nodes > 1 and tp > (num_gpus // num_nodes):
-        # Only emit this warning if TP actually crosses a node boundary
+        # Elevated to hard error for standard container environments
         issues.append(
             ValidationIssue(
-                "warning",
+                "error",
                 "MULTI_NODE_TENSOR_PARALLEL",
-                f"Tensor Parallelism (TP={tp}) across nodes detected. TP across nodes requires extremely high-bandwidth, ultra-low latency networking (e.g., NVLink over InfiniBand) to perform acceptably.",
+                f"Tensor Parallelism (TP={tp}) across nodes detected. TP across nodes in standard environments results in catastrophic latency. TP should be strictly confined to gpus_per_node. Force Pipeline Parallelism (PP) instead.",
             )
         )
 
@@ -1230,6 +1247,11 @@ def validate_feasibility(
         usable_vram_per_gpu = mem_per_gpu * 0.90
         kv_cache_budget = usable_vram_per_gpu - weights_per_gpu
 
+        total_ctx = input_len + output_len
+        kv_gb_per_seq = estimate_kv_cache_gb_per_seq(
+            hf_config, total_ctx, dtype, quantization, tp
+        )
+
         if weights_per_gpu > mem_per_gpu:
             issues.append(
                 ValidationIssue(
@@ -1246,6 +1268,16 @@ def validate_feasibility(
                     f"Weights ({weights_per_gpu:.1f} GB) exceed the 90% utilization threshold ({usable_vram_per_gpu:.1f} GB). No room for KV cache.",
                 )
             )
+        elif kv_gb_per_seq is not None:
+            max_seqs_possible = int(kv_cache_budget / kv_gb_per_seq)
+            if max_seqs_possible < 4:
+                issues.append(
+                    ValidationIssue(
+                        "warning",
+                        "CRITICAL_KV_CACHE_SHORTAGE",
+                        f"Only ~{kv_cache_budget:.1f} GB left for KV cache per GPU. At {kv_gb_per_seq:.4f} GB per sequence, this supports < {max_seqs_possible} concurrent requests. High risk of OOM.",
+                    )
+                )
         elif kv_cache_budget < 8.0:
             issues.append(
                 ValidationIssue(
@@ -1254,17 +1286,7 @@ def validate_feasibility(
                     f"Only ~{kv_cache_budget:.1f} GB left for KV cache/activations per GPU. High concurrency will cause OOM or severe queuing delays.",
                 )
             )
-        elif weights_per_gpu > (mem_per_gpu * 0.85):
-            issues.append(
-                ValidationIssue(
-                    "warning",
-                    "WEIGHTS_HEADROOM_LOW",
-                    f"Estimated weights per GPU ({weights_per_gpu:.1f} GB) leaves low headroom on {mem_per_gpu} GB GPUs.",
-                )
-            )
 
-        # Check for extreme underutilization / excessive scaling
-        # If the model uses less than 10% of the VRAM on the GPU, scaling it across multiple GPUs via TP or PP is highly inefficient.
         if (tp * pp) > 1 and weights_per_gpu < (mem_per_gpu * 0.10):
             issues.append(
                 ValidationIssue(
@@ -1358,7 +1380,6 @@ def parse_vllm_version(ver_str: Optional[str]) -> Tuple[int, ...]:
 
 
 def build_candidate_config(
-    *,
     candidate_name: str,
     model: str,
     family: str,
@@ -1408,6 +1429,7 @@ def build_candidate_config(
         enable_expert_parallel_override: Force enable/disable MoE expert parallelism.
         hf_config: The Hugging Face config payload.
         model_params_b: Override for the parameter count.
+        vllm_version_hint: The target vLLM version string.
 
     Returns:
         A populated CandidateConfig instance representing the profile.
@@ -1544,25 +1566,17 @@ def build_candidate_config(
 
     v = parse_vllm_version(vllm_version_hint)
 
-    # Chunked prefill became default in v0.6.0. Before that, we must explicitly enable it.
     if v < (0, 6, 0):
         args += ["--enable-chunked-prefill"]
         rationale["--enable-chunked-prefill"] = (
             f"Enabled as a good default for mixed/long prompt handling (required for vLLM < 0.6.0)."
         )
-    else:
-        # It's default in >= 0.6.0, but we can still emit it for clarity or let it be implicit.
-        # Let's keep it implicit for cleaner arguments if version is recent.
-        pass
 
     args += ["--max-num-batched-tokens", str(max_num_batched_tokens)]
     rationale["--max-num-batched-tokens"] = (
         f"Set to {max_num_batched_tokens} as the {candidate_name} chunk size limit."
     )
 
-    # Partial prefill limits were introduced around v0.8.0.
-    # CRITICAL: These force V0 engine fallback which crashes V1-only builds (like RHAI 0.11+).
-    # We restrict them to [0.8.0, 0.11.0) to avoid this.
     if v >= (0, 8, 0) and v < (0, 11, 0):
         args += ["--max-num-partial-prefills", str(max_partial_prefills)]
         rationale["--max-num-partial-prefills"] = (
@@ -1584,7 +1598,6 @@ def build_candidate_config(
             "Not enabled by default for this profile/family without shared-prefix expectation."
         )
 
-    # Async scheduling was added in v0.10.0
     if async_sched and v >= (0, 10, 0):
         args += ["--async-scheduling"]
         rationale["--async-scheduling"] = (
@@ -1598,11 +1611,6 @@ def build_candidate_config(
         rationale["--async-scheduling"] = (
             f"Disabled for {candidate_name} profile to protect TTFT under strict latency goals."
         )
-
-    # Stream interval and log request flags are often unstable or deprecated across versions.
-    # Removed to ensure stability on OpenShift AI and other custom builds.
-    # if v >= (0, 11, 0): ...
-    # if v < (0, 12, 0): ...
 
     if include_cuda_graph_sizes:
         args += ["--cuda-graph-sizes", "1", "2", "4", "8", "16", "32", "64", "128"]
@@ -1893,7 +1901,6 @@ def main() -> int:
 
     candidates: List[CandidateConfig] = []
 
-    # Auto-detect quantization if not explicitly provided
     detected_quant = detect_quantization_from_config(hf_config)
     effective_quantization = args.quantization or detected_quant
 
@@ -1934,15 +1941,6 @@ def main() -> int:
         except Exception:
             return default
 
-    tp_str = arg_value(balanced.args, "--tensor-parallel-size", "1")
-    pp_str = arg_value(balanced.args, "--pipeline-parallel-size", "1")
-    max_model_len_str = arg_value(
-        balanced.args, "--max-model-len", str(args.max_model_len or 4096)
-    )
-
-    # We need to validate each candidate configuration individually because
-    # extracting the max(TP) and max(PP) globally can create impossible
-    # topologies (e.g., max_tp=4 from Latency + max_pp=2 from Balanced = 8 GPUs needed, but only 4 exist).
     issues_set = set()
     issues = []
 
@@ -1982,7 +1980,6 @@ def main() -> int:
             valid_vllm_args=valid_vllm_args,
         )
 
-        # Deduplicate issues
         for issue in c_issues:
             issue_tuple = (issue.level, issue.code, issue.message)
             if issue_tuple not in issues_set:
