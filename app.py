@@ -139,6 +139,27 @@ def estimate():
         if output_json and "llm_optimizer" in output_json:
             captured_stderr += "\n" + output_json["llm_optimizer"].get("stderr", "")
 
+        # Check for Invalid GPU error (soft failure -> warning)
+        # llm-optimizer doesn't support all GPUs (like L4/L40S) natively yet, but we can fallback to heuristics.
+        if "Invalid value for '--gpu'" in captured_stderr:
+            issue = {
+                "level": "warning",
+                "code": "GPU_NOT_PROFILED",
+                "message": "The selected GPU is not natively profiled by llm-optimizer. Using heuristic fallbacks.",
+            }
+
+            if response["json"]:
+                if "validation_issues" not in response["json"]:
+                    response["json"]["validation_issues"] = []
+                response["json"]["validation_issues"].append(issue)
+
+                # Mask the failure so UI treats it as success (with warnings)
+                if response["json"].get("llm_optimizer"):
+                    response["json"]["llm_optimizer"]["returncode"] = 0
+
+                # Ensure the outer response is also success
+                response["returncode"] = 0
+
         if "precision not supported on" in captured_stderr:
             issue = {
                 "level": "error",

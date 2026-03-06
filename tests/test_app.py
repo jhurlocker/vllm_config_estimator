@@ -208,7 +208,68 @@ def test_mixed_precision_error_and_warnings(client):
         assert data["returncode"] == 1
 
         # Should have BOTH issues
+    issues = data["json"]["validation_issues"]
+    codes = [i["code"] for i in issues]
+    assert "EXISTING_WARNING" in codes
+    assert "PRECISION_NOT_SUPPORTED" in codes
+
+
+def test_invalid_gpu_warning(client):
+    """
+    Test that invalid GPU values result in a WARNING, not an error.
+    """
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("tempfile.NamedTemporaryFile") as mock_temp,
+        patch("os.path.exists") as mock_exists,
+        patch("builtins.open") as mock_open,
+        patch("os.remove"),
+    ):
+        # Mock subprocess result with non-zero exit code but specific error msg
+        mock_result = MagicMock()
+        mock_result.returncode = 2
+        mock_result.stdout = ""
+        mock_result.stderr = (
+            "Error: Invalid value for '--gpu': 'L4' is not one of 'A100'..."
+        )
+        mock_run.return_value = mock_result
+
+        # Mock JSON file existence (script produces it even on error)
+        mock_exists.return_value = True
+
+        tool_output = {
+            "llm_optimizer": {"returncode": 2, "stderr": mock_result.stderr},
+            "candidates": [],  # Empty candidates
+            "validation_issues": [],
+        }
+
+        mock_file = MagicMock()
+        mock_file.__enter__.return_value = mock_file
+        mock_file.read.return_value = json.dumps(tool_output)
+        mock_open.return_value = mock_file
+
+        # Call the endpoint
+        resp = client.post(
+            "/estimate",
+            data={
+                "model": "foo",
+                "gpu": "L4",
+                "num_gpus": 1,
+                "input_len": 10,
+                "output_len": 10,
+            },
+        )
+
+        assert resp.status_code == 200
+        data = resp.get_json()
+
+        # Check returncode is forced to 0 (Success)
+        assert data["returncode"] == 0
+
+        # Check we have a warning
+        assert "json" in data
+        assert "validation_issues" in data["json"]
         issues = data["json"]["validation_issues"]
-        codes = [i["code"] for i in issues]
-        assert "EXISTING_WARNING" in codes
-        assert "PRECISION_NOT_SUPPORTED" in codes
+        assert len(issues) > 0
+        assert issues[0]["code"] == "GPU_NOT_PROFILED"
+        assert issues[0]["level"] == "warning"
