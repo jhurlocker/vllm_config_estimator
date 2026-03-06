@@ -1577,22 +1577,10 @@ def build_candidate_config(
             f"Disabled for {candidate_name} profile to protect TTFT under strict latency goals."
         )
 
-    # Stream interval was added in v0.11.0 (or very late v0.10.x, but explicitly verified in 0.11.2)
-    if v >= (0, 11, 0):
-        args += ["--stream-interval", str(stream_interval)]
-        rationale["--stream-interval"] = (
-            f"Set to {stream_interval} for {candidate_name} streaming overhead tradeoff."
-        )
-    else:
-        rationale["--stream-interval"] = (
-            f"Disabled because vLLM version ({vllm_version_hint}) is too old to support stream-interval (requires >= 0.11.0)."
-        )
-
-    if v < (0, 12, 0):
-        args += ["--disable-log-requests"]
-        rationale["--disable-log-requests"] = (
-            "Enabled to reduce request logging overhead."
-        )
+    # Stream interval and log request flags are often unstable or deprecated across versions.
+    # Removed to ensure stability on OpenShift AI and other custom builds.
+    # if v >= (0, 11, 0): ...
+    # if v < (0, 12, 0): ...
 
     if include_cuda_graph_sizes:
         args += ["--cuda-graph-sizes", "1", "2", "4", "8", "16", "32", "64", "128"]
