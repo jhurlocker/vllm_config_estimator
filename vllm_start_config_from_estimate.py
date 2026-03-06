@@ -91,7 +91,13 @@ def format_args_multiline(args: List[str], joiner: str) -> str:
             while i < len(args) and not args[i].startswith("--"):
                 line_parts.append(shlex.quote(args[i]))
                 i += 1
-            lines.append(" ".join(line_parts))
+
+            if len(line_parts) == 2:
+                # Format as --flag=value for single-value args (cleaner for YAML)
+                lines.append(f"{line_parts[0]}={line_parts[1]}")
+            else:
+                # Format as --flag or --flag val1 val2
+                lines.append(" ".join(line_parts))
         else:
             lines.append(shlex.quote(token))
             i += 1
