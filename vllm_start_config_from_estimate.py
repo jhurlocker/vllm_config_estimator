@@ -1689,11 +1689,11 @@ def print_candidate(candidate: CandidateConfig) -> None:
     Args:
         candidate: The CandidateConfig instance to display.
     """
-    bash_args = format_args_multiline(candidate.args, " \\\n  ")
+    bash_args = format_args_multiline(candidate.args, "\n")
     yaml_args = format_args_multiline(candidate.args, "\n      ")
 
     print(f"\n--- Candidate: {candidate.name} ---")
-    print("VLLM_ADDITIONAL_ARGS (Bash):")
+    print("VLLM_ADDITIONAL_ARGS:")
     print(bash_args)
 
     print("\nOpenShift env snippet:")
@@ -1743,7 +1743,7 @@ def write_json_report(
                 "name": c.name,
                 "vllm_additional_args_list": c.args,
                 "vllm_additional_args_string": shell_join(c.args),
-                "vllm_additional_args_bash": format_args_multiline(c.args, " \\\n  "),
+                "vllm_additional_args_bash": format_args_multiline(c.args, "\n"),
                 "vllm_additional_args_yaml": format_args_multiline(c.args, "\n      "),
                 "rationale": c.rationale,
                 "tuning_knobs": c.tuning_knobs,
