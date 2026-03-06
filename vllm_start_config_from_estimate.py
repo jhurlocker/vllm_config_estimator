@@ -1539,7 +1539,9 @@ def build_candidate_config(
     )
 
     # Partial prefill limits were introduced around v0.8.0.
-    if v >= (0, 8, 0):
+    # CRITICAL: These force V0 engine fallback which crashes V1-only builds (like RHAI 0.11+).
+    # We restrict them to [0.8.0, 0.11.0) to avoid this.
+    if v >= (0, 8, 0) and v < (0, 11, 0):
         args += ["--max-num-partial-prefills", str(max_partial_prefills)]
         rationale["--max-num-partial-prefills"] = (
             f"Set to {max_partial_prefills} for {candidate_name} prefill scheduling."
@@ -1586,8 +1588,11 @@ def build_candidate_config(
             f"Disabled because vLLM version ({vllm_version_hint}) is too old to support stream-interval (requires >= 0.11.0)."
         )
 
-    args += ["--disable-log-requests"]
-    rationale["--disable-log-requests"] = "Enabled to reduce request logging overhead."
+    if v < (0, 12, 0):
+        args += ["--disable-log-requests"]
+        rationale["--disable-log-requests"] = (
+            "Enabled to reduce request logging overhead."
+        )
 
     if include_cuda_graph_sizes:
         args += ["--cuda-graph-sizes", "1", "2", "4", "8", "16", "32", "64", "128"]
