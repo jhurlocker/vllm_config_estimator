@@ -322,8 +322,8 @@
 
             let html = `
                 <div style="margin-bottom: 20px;">
-                    <button class="copy-btn" onclick="copyToClipboard('code-${candidate.name}')">Copy bash</button>
-                    <h4 style="margin-top: 0;">Bash Launch Arguments</h4>
+                    <button class="copy-btn" onclick="copyToClipboard('code-${candidate.name}')">Copy launch arguments</button>
+                    <h4 style="margin-top: 0;">Launch Arguments</h4>
                     <div class="code-block" id="code-${candidate.name}">${candidate.vllm_additional_args_bash}</div>
                 </div>
                 
