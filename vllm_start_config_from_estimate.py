@@ -881,8 +881,9 @@ def choose_max_model_len(
     hf_max_ctx: Optional[int],
 ) -> int:
     """
-    Computes a practical max_model_len constraint based on requested input/output sizes and model limits,
-    snapping to power-of-two boundaries for better cache efficiency where possible.
+    Computes a practical max_model_len constraint based on requested input/output sizes and model limits.
+    For smaller contexts, it snaps to standard powers of 2 (4k, 8k).
+    For larger contexts (>8k), it uses a tighter 15% buffer rounded to the nearest 1k to conserve VRAM.
 
     Args:
         user_value: Explicit user-provided max_model_len override.
@@ -896,17 +897,32 @@ def choose_max_model_len(
     if user_value:
         return user_value
 
-    target = max(4096, int((input_len + output_len) * 2))
+    required = input_len + output_len
 
+    # If the requirement is small, stick to standard 4096 / 8192 buckets for simplicity
+    if required <= 4096:
+        return 4096
+    if required <= 8192:
+        return 8192
+
+    # For large contexts, doubling (the old logic) is too expensive (e.g. 10k -> 32k).
+    # Instead, apply a 15% safety buffer for prompt variance.
+    target = int(required * 1.15)
+
+    # Snap to nearest 1024 to keep the number clean
+    remainder = target % 1024
+    if remainder:
+        target += 1024 - remainder
+
+    # Enforce model limits if known
     if hf_max_ctx:
         if target > hf_max_ctx:
             target = hf_max_ctx
-        if target < (input_len + output_len):
-            target = input_len + output_len
-
-    for snap in (4096, 8192, 16384, 32768, 65536, 131072):
-        if target <= snap:
-            return snap
+        # If the model limit is somehow smaller than the requirement,
+        # we must at least return the requirement (even if it might error at runtime,
+        # it's better than returning a value < input_len)
+        if target < required:
+            target = required
 
     return target
 
