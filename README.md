@@ -10,6 +10,10 @@ A comprehensive, UI-driven tool powered by `llm-optimizer` designed to help user
 - **Hardware & Network Aware:** Evaluates multi-node setups and flags network bottlenecks (e.g. warning if InfiniBand/RoCE is required for cross-node PP).
 - **Validation:** Provides active Out-of-Memory (OOM) protection by warning if a configuration is not physically feasible before you even touch a cluster.
 
+![Screenshot of vLLM estimator](./img/screenshot1.png)
+![Screenshot of vLLM estimator](./img/screenshot2.png)
+![Screenshot of vLLM estimator](./img/screenshot3.png)
+
 ## Running Locally
 
 To run the web interface locally, you need Python installed on your machine.
@@ -40,21 +44,48 @@ Run with Podman
 
 ## Deploying to OpenShift
 
-This repository contains a production-ready `Dockerfile` specifically configured to comply with OpenShift security constraints (running as an arbitrary non-root UID).
+### Option 1: Using the Pre-built Image (Recommended)
+
+You can quickly deploy the application to your OpenShift cluster using the pre-built image from Quay.io.
 
 1. Ensure you are logged into your OpenShift cluster via the `oc` CLI.
-2. Create a new build and deployment using the local source code:
+2. Create a new project (if needed):
    ```bash
-   # Create a new project/namespace if needed
    oc new-project vllm-estimator
-   
-   # Build and deploy the application
-   oc new-app . --name=vllm-config-estimator
-   
-   # Expose the service to create a Route
+   ```
+3. Deploy the application using the image:
+   ```bash
+   oc new-app quay.io/jhurlocker/vllm_config_estimator:latest --name=vllm-config-estimator
+   ```
+4. Expose the service to create a Route:
+   ```bash
    oc expose svc/vllm-config-estimator
    ```
-3. Retrieve the Route URL to access your deployed application:
+5. Retrieve the Route URL to access your deployed application:
+   ```bash
+   oc get route vllm-config-estimator
+   ```
+
+### Option 2: Building and Deploying from Source
+
+This repository contains a `Containerfile` specifically configured to comply with OpenShift security constraints (running as an arbitrary non-root UID).
+
+1. Build the image locally using Podman:
+   ```bash
+   podman build -t quay.io/<your-username>/vllm_config_estimator:latest -f Containerfile .
+   ```
+2. Push the image to a container registry (e.g., Quay.io):
+   ```bash
+   podman push quay.io/<your-username>/vllm_config_estimator:latest
+   ```
+3. Ensure you are logged into your OpenShift cluster via the `oc` CLI.
+4. Deploy your custom image to OpenShift:
+   ```bash
+   oc new-project vllm-estimator
+   oc new-app quay.io/<your-username>/vllm_config_estimator:latest --name=vllm-config-estimator
+   oc expose svc/vllm-config-estimator
+   ```
+5. Retrieve the Route URL to access your deployed application:
    ```bash
    oc get route vllm-config-estimator
    ```
@@ -75,6 +106,10 @@ The UI provides an **Advanced & Overrides** section. These map directly to under
 - **Model Family Preset:** (`--model-family`) Force a specific family's caching or architecture behavior instead of relying on auto-detection.
 - **Model Parameters (Billions):** (`--model-params-b`) If HuggingFace lookup fails, explicitly provide the parameter count (e.g. `70.5`) to allow VRAM calculation to succeed.
 - **Estimation Target:** (`--target`) Manually force `llm-optimizer` to optimize for `throughput` or `latency`.
+
+## AI-Generated Project
+
+This project and its associated tooling (including the web interface, API endpoints, and configuration heuristics) were largely developed through the assistance of an AI coding agent. 
 
 ## Community & Contributing
 
