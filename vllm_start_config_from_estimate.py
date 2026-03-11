@@ -362,9 +362,25 @@ def parse_param_count_billions(
                 num_experts = config.get(
                     "num_local_experts", config.get("moe_num_experts", 8)
                 )
-                params = (
-                    (12 * (hidden_size**2)) * num_layers * (num_experts * 0.5)
-                ) + (vocab_size * hidden_size)
+                # If intermediate_size is provided, use it for exact calculation
+                intermediate_size = config.get("intermediate_size")
+                if intermediate_size:
+                    # MoE MLP usually has 3 linear layers (gate, up, down)
+                    # For some architectures it might be 2. Assume 3 * hidden_size * intermediate_size for standard SwiGLU
+                    # We also add the non-MoE params (attention, etc.)
+                    # Let's do a more generic estimation if intermediate_size is known:
+                    # Non-MoE parameters roughly: 4 * hidden_size^2 (Attention) per layer
+                    attention_params = 4 * (hidden_size**2)
+                    expert_params = 3 * hidden_size * intermediate_size * num_experts
+                    # Some architectures might share intermediate size or have shared experts.
+                    # This is an approximation.
+                    params = (attention_params + expert_params) * num_layers + (
+                        vocab_size * hidden_size
+                    )
+                else:
+                    params = (
+                        (12 * (hidden_size**2)) * num_layers * (num_experts * 0.5)
+                    ) + (vocab_size * hidden_size)
             else:
                 params = (12 * (hidden_size**2) * num_layers) + (
                     vocab_size * hidden_size
@@ -513,6 +529,7 @@ class CandidateConfig:
     args: List[str]
     rationale: Dict[str, str]
     tuning_knobs: List[str]
+    other_args_to_consider: List[str]
     guidellm_cmd: str
 
 
@@ -559,14 +576,14 @@ def model_family_defaults(family: str) -> Dict[str, object]:
     """
     base = {
         "enable_expert_parallel_default": None,
-        "trust_remote_code_default": True,
+        "trust_remote_code_default": False,
         "prefix_caching_bias": False,
     }
     if family == "gpt-oss":
         base.update(
             {
                 "enable_expert_parallel_default": True,
-                "trust_remote_code_default": True,
+                "trust_remote_code_default": False,
                 "prefix_caching_bias": True,
             }
         )
@@ -582,7 +599,7 @@ def model_family_defaults(family: str) -> Dict[str, object]:
         base.update(
             {
                 "enable_expert_parallel_default": False,
-                "trust_remote_code_default": True,
+                "trust_remote_code_default": False,
                 "prefix_caching_bias": True,
             }
         )
@@ -590,7 +607,7 @@ def model_family_defaults(family: str) -> Dict[str, object]:
         base.update(
             {
                 "enable_expert_parallel_default": False,
-                "trust_remote_code_default": True,
+                "trust_remote_code_default": False,
                 "prefix_caching_bias": False,
             }
         )
@@ -1550,9 +1567,7 @@ def build_candidate_config(
 
     if trust_remote_code:
         args += ["--trust-remote-code"]
-        rationale["--trust-remote-code"] = (
-            "Enabled per model family default or explicit CLI option."
-        )
+        rationale["--trust-remote-code"] = "Enabled per explicit CLI option."
 
     args += ["--max-model-len", str(max_model_len)]
     rationale["--max-model-len"] = (
@@ -1578,15 +1593,8 @@ def build_candidate_config(
     )
 
     if v >= (0, 8, 0) and v < (0, 11, 0):
-        args += ["--max-num-partial-prefills", str(max_partial_prefills)]
-        rationale["--max-num-partial-prefills"] = (
-            f"Set to {max_partial_prefills} for {candidate_name} prefill scheduling."
-        )
-
-        args += ["--max-long-partial-prefills", str(max_long_partial_prefills)]
-        rationale["--max-long-partial-prefills"] = (
-            f"Set to {max_long_partial_prefills} to limit long-prefill dominance in {candidate_name} profile."
-        )
+        # Moved to tuning knobs to reduce baseline errors
+        pass
 
     if prefix_cache:
         args += ["--enable-prefix-caching"]
@@ -1652,6 +1660,38 @@ def build_candidate_config(
         rates_str = "1,8,32,64,128"
         rate_type = "concurrency"
 
+    if v >= (0, 8, 0) and v < (0, 11, 0):
+        tuning_knobs.append(
+            f"`--max-num-partial-prefills`: Experiment with setting this to {max_partial_prefills} for better {candidate_name} prefill scheduling."
+        )
+        tuning_knobs.append(
+            f"`--max-long-partial-prefills`: Experiment with setting this to {max_long_partial_prefills} to limit long-prefill dominance."
+        )
+
+    other_args_to_consider: List[str] = []
+
+    if not trust_remote_code:
+        other_args_to_consider.append(
+            "`--trust-remote-code`: Try adding this if you encounter missing architecture or remote code errors, allowing the model's custom code to run."
+        )
+
+    # Tool calling tuning knobs
+    other_args_to_consider.append(
+        "`--enable-auto-tool-choice`: Add this to your launch arguments to enable automatic tool choice for supported models when implementing tool calling."
+    )
+
+    parser_example = "'llama3_json', 'hermes', 'mistral'"
+    if family == "llama":
+        parser_example = "'llama3_json'"
+    elif family == "mistral":
+        parser_example = "'mistral'"
+    elif "hermes" in model.lower():
+        parser_example = "'hermes'"
+
+    other_args_to_consider.append(
+        f"`--tool-call-parser <parser>`: Set this to the appropriate parser for your model (e.g., {parser_example}) if you are implementing tool calling."
+    )
+
     guidellm_cmd = (
         f"guidellm --target http://localhost:8000/v1 \\\n"
         f"  --model {model} \\\n"
@@ -1668,6 +1708,7 @@ def build_candidate_config(
         args=args,
         rationale=rationale,
         tuning_knobs=tuning_knobs,
+        other_args_to_consider=other_args_to_consider,
         guidellm_cmd=guidellm_cmd,
     )
 
@@ -1716,6 +1757,16 @@ def print_candidate(candidate: CandidateConfig) -> None:
     print("    value: >-")
     print(f"      {yaml_args}")
 
+    if candidate.tuning_knobs:
+        print("\nTop Tuning Knobs:")
+        for knob in candidate.tuning_knobs:
+            print(f"  * {knob}")
+
+    if candidate.other_args_to_consider:
+        print("\nOther Arguments to Consider:")
+        for arg in candidate.other_args_to_consider:
+            print(f"  * {arg}")
+
     print("\nRationale:")
     for k, v in candidate.rationale.items():
         print(f"  {k}: {v}")
@@ -1761,6 +1812,7 @@ def write_json_report(
                 "vllm_additional_args_yaml": format_args_multiline(c.args, "\n      "),
                 "rationale": c.rationale,
                 "tuning_knobs": c.tuning_knobs,
+                "other_args_to_consider": c.other_args_to_consider,
                 "guidellm_cmd": c.guidellm_cmd,
             }
             for c in candidates

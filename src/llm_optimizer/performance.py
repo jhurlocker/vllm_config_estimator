@@ -58,9 +58,9 @@ def calculate_transformer_flops(
     # Model parameters
     d_model = model_config.hidden_dim  # Hidden dimension
     n_layers = model_config.num_layers  # Number of transformer layers
-    n_heads = model_config.num_heads    # Number of attention heads
+    n_heads = model_config.num_heads  # Number of attention heads
     n_kv_heads = model_config.num_kv_heads  # Number of KV heads (for GQA/MQA)
-    d_head = d_model // n_heads         # Dimension per head
+    d_head = d_model // n_heads  # Dimension per head
 
     # Calculate intermediate dimension (typically 4x hidden dim in standard transformers)
     # We'll estimate it from total parameters if not directly available
@@ -75,32 +75,37 @@ def calculate_transformer_flops(
         # K,V: [B, T, d_model] @ [d_model, d_kv] -> [B, T, d_kv] where d_kv = n_kv_heads * d_head
         d_kv = n_kv_heads * d_head
         qkv_flops = 2 * sequence_length * (d_model * d_model + 2 * d_model * d_kv)
-        flops_breakdown['attention_qkv'] = qkv_flops * n_layers
+        flops_breakdown["attention_qkv"] = qkv_flops * n_layers
 
         # 2. Attention Scores: Q @ K^T
         # [B, n_heads, T, d_head] @ [B, n_heads, d_head, T] -> [B, n_heads, T, T]
         # Note: For GQA/MQA, keys/values are broadcast across query heads
         qk_flops = 2 * n_heads * sequence_length * sequence_length * d_head
-        flops_breakdown['attention_scores'] = qk_flops * n_layers
+        flops_breakdown["attention_scores"] = qk_flops * n_layers
 
         # 3. Softmax: Applied to attention scores
         # Includes exponential, sum reduction, and division operations
         # Approximation: ~3 ops per element for softmax
         softmax_flops = 3 * n_heads * sequence_length * sequence_length
-        flops_breakdown['attention_softmax'] = softmax_flops * n_layers
+        flops_breakdown["attention_softmax"] = softmax_flops * n_layers
 
         # 4. Attention Output: Softmax @ V
         # [B, n_heads, T, T] @ [B, n_heads, T, d_head] -> [B, n_heads, T, d_head]
         av_flops = 2 * n_heads * sequence_length * sequence_length * d_head
-        flops_breakdown['attention_output'] = av_flops * n_layers
+        flops_breakdown["attention_output"] = av_flops * n_layers
 
         # 5. Output Projection: Final linear layer
         # [B, T, d_model] @ [d_model, d_model] -> [B, T, d_model]
         proj_flops = 2 * sequence_length * d_model * d_model
-        flops_breakdown['attention_proj'] = proj_flops * n_layers
+        flops_breakdown["attention_proj"] = proj_flops * n_layers
     else:
-        for key in ['attention_qkv', 'attention_scores', 'attention_softmax',
-                   'attention_output', 'attention_proj']:
+        for key in [
+            "attention_qkv",
+            "attention_scores",
+            "attention_softmax",
+            "attention_output",
+            "attention_proj",
+        ]:
             flops_breakdown[key] = 0.0
 
     if include_mlp:
@@ -109,12 +114,12 @@ def calculate_transformer_flops(
         # Down projection: [B, T, d_ff] @ [d_ff, d_model] -> [B, T, d_model]
         # Note: Modern transformers often use SwiGLU which has additional complexity
         mlp_flops = 2 * sequence_length * (d_model * d_ff + d_ff * d_model)
-        flops_breakdown['mlp'] = mlp_flops * n_layers
+        flops_breakdown["mlp"] = mlp_flops * n_layers
     else:
-        flops_breakdown['mlp'] = 0.0
+        flops_breakdown["mlp"] = 0.0
 
     # Total FLOPS per token
-    flops_breakdown['total'] = sum(flops_breakdown.values())
+    flops_breakdown["total"] = sum(flops_breakdown.values())
 
     return flops_breakdown
 
@@ -167,13 +172,13 @@ def calculate_memory_access_bytes(
     d_ff = 4 * d_model  # Estimated feed-forward dimension
 
     weights_per_layer = (
-        d_model * (d_model + 2 * d_kv) +  # QKV projections
-        d_model * d_model +                # Output projection
-        d_model * d_ff * 2                 # MLP up/down projections
+        d_model * (d_model + 2 * d_kv)  # QKV projections
+        + d_model * d_model  # Output projection
+        + d_model * d_ff * 2  # MLP up/down projections
     )
 
     total_model_weights = weights_per_layer * n_layers * bytes_per_param
-    memory_breakdown['model_weights'] = total_model_weights
+    memory_breakdown["model_weights"] = total_model_weights
 
     # 2. KV Cache Access
     if include_kv_cache:
@@ -183,22 +188,29 @@ def calculate_memory_access_bytes(
         # During decode: we access all previous tokens' KV cache
         # During prefill: we write to KV cache (similar access pattern)
         total_kv_access = kv_per_token * sequence_length * batch_size
-        memory_breakdown['kv_cache'] = total_kv_access
+        memory_breakdown["kv_cache"] = total_kv_access
     else:
-        memory_breakdown['kv_cache'] = 0.0
+        memory_breakdown["kv_cache"] = 0.0
 
     # 3. Activations
     # Intermediate activations during forward pass
     # This includes attention scores, MLP activations, etc.
     # Approximation based on sequence length and model dimensions
     activations_size = (
-        batch_size * sequence_length * d_model * bytes_per_param +  # Input/output activations
-        batch_size * model_config.num_heads * sequence_length * sequence_length * bytes_per_param  # Attention matrices
+        batch_size
+        * sequence_length
+        * d_model
+        * bytes_per_param  # Input/output activations
+        + batch_size
+        * model_config.num_heads
+        * sequence_length
+        * sequence_length
+        * bytes_per_param  # Attention matrices
     )
-    memory_breakdown['activations'] = activations_size
+    memory_breakdown["activations"] = activations_size
 
     # Total memory access per token generation
-    memory_breakdown['total'] = sum(memory_breakdown.values())
+    memory_breakdown["total"] = sum(memory_breakdown.values())
 
     return memory_breakdown
 
@@ -223,7 +235,7 @@ def calculate_arithmetic_intensity(
         Arithmetic intensity in operations per byte
     """
     if memory_bytes <= 0:
-        return float('inf')
+        return float("inf")
     return flops / memory_bytes
 
 
@@ -242,7 +254,6 @@ def determine_performance_bound(
         True if memory-bound, False if compute-bound
     """
     return arithmetic_intensity < hardware_ops_per_byte
-
 
 
 @dataclass
@@ -277,8 +288,6 @@ class SLOConstraint:
     operator: str  # <, >, <=, >=
     value: float
     unit: str  # ms, s
-
-
 
 
 def estimate_llm_performance(
@@ -332,7 +341,9 @@ def estimate_llm_performance(
 
     # Apply VRAM utilization factor
     total_usable_vram_bytes = gpu_resources.total_memory_bytes * vram_util_factor
-    total_usable_vram = total_usable_vram_bytes / (1024**3)  # Convert to GB for calculations
+    total_usable_vram = total_usable_vram_bytes / (
+        1024**3
+    )  # Convert to GB for calculations
 
     # Hardware roofline threshold: ops/byte ratio
     # If workload AI < this threshold → memory bound, else → compute bound
@@ -351,7 +362,7 @@ def estimate_llm_performance(
         model_config,
         sequence_length=total_seq_len_per_request,
         batch_size=concurrency,
-        precision=precision
+        precision=precision,
     )
     kv_cache_memory_gb = kv_cache_memory_bytes / (1024**3)
 
@@ -390,7 +401,7 @@ def estimate_llm_performance(
         include_attention=True,
         include_mlp=True,
     )
-    prefill_flops_per_token = prefill_flops_breakdown['total']
+    prefill_flops_per_token = prefill_flops_breakdown["total"]
     total_prefill_flops = prefill_flops_per_token * concurrency
 
     # Memory access for prefill: model weights + KV cache writes + activations
@@ -401,7 +412,7 @@ def estimate_llm_performance(
         bytes_per_param=bytes_per_param,
         include_kv_cache=True,  # Writing to KV cache during prefill
     )
-    prefill_memory_bytes = prefill_memory_breakdown['total']
+    prefill_memory_bytes = prefill_memory_breakdown["total"]
 
     # Prefill arithmetic intensity and bound determination
     prefill_arithmetic_intensity = calculate_arithmetic_intensity(
@@ -434,22 +445,34 @@ def estimate_llm_performance(
         include_attention=True,
         include_mlp=True,
     )
-    decode_flops_per_token = decode_flops_breakdown['total']
+    decode_flops_per_token = decode_flops_breakdown["total"]
 
     # However, attention still needs to attend to all previous tokens
     # Add the quadratic attention terms for full context
     current_seq_len = input_length + 1  # Assuming we're generating first output token
     attention_context_flops = (
         # QK^T with full context: [1, d_head] @ [d_head, current_seq_len]
-        2 * model_config.num_heads * 1 * current_seq_len * (model_config.hidden_dim // model_config.num_heads) +
+        2
+        * model_config.num_heads
+        * 1
+        * current_seq_len
+        * (model_config.hidden_dim // model_config.num_heads)
+        +
         # Softmax over context
-        3 * model_config.num_heads * 1 * current_seq_len +
+        3 * model_config.num_heads * 1 * current_seq_len
+        +
         # Attention @ V: [1, current_seq_len] @ [current_seq_len, d_head]
-        2 * model_config.num_heads * 1 * current_seq_len * (model_config.hidden_dim // model_config.num_heads)
+        2
+        * model_config.num_heads
+        * 1
+        * current_seq_len
+        * (model_config.hidden_dim // model_config.num_heads)
     ) * model_config.num_layers
 
     # Total decode FLOPS per token (amortized across concurrency)
-    total_decode_flops = (decode_flops_per_token + attention_context_flops) * concurrency
+    total_decode_flops = (
+        decode_flops_per_token + attention_context_flops
+    ) * concurrency
 
     # Memory access for decode: model weights + full KV cache read + activations
     decode_memory_breakdown = calculate_memory_access_bytes(
@@ -459,7 +482,7 @@ def estimate_llm_performance(
         bytes_per_param=bytes_per_param,
         include_kv_cache=True,
     )
-    decode_memory_bytes = decode_memory_breakdown['total']
+    decode_memory_bytes = decode_memory_breakdown["total"]
 
     # Decode arithmetic intensity and bound determination
     decode_arithmetic_intensity = calculate_arithmetic_intensity(
@@ -642,7 +665,9 @@ def calculate_concurrency_limits(
     # Get aggregated GPU resources
     gpu_resources = gpu_manager.get_total_resources(num_gpus, gpu_name, precision)
     total_usable_vram_bytes = gpu_resources.total_memory_bytes * vram_util_factor
-    total_usable_vram = total_usable_vram_bytes / (1024**3)  # Convert to GB for calculations
+    total_usable_vram = total_usable_vram_bytes / (
+        1024**3
+    )  # Convert to GB for calculations
 
     # Calculate model memory
     model_size_bytes = memory_calculator.calculate_model_memory(model_config, precision)
@@ -654,13 +679,17 @@ def calculate_concurrency_limits(
         model_config,
         sequence_length=total_seq_len,
         batch_size=1,  # Per request
-        precision=precision
+        precision=precision,
     )
     kv_cache_per_request_gb = kv_cache_per_request_bytes / (1024**3)
 
     # 1. KV Cache Memory Limit (Hard constraint)
     available_kv_memory = total_usable_vram - model_size_gb
-    max_concurrency_kv = int(available_kv_memory / kv_cache_per_request_gb) if kv_cache_per_request_gb > 0 else 1024
+    max_concurrency_kv = (
+        int(available_kv_memory / kv_cache_per_request_gb)
+        if kv_cache_per_request_gb > 0
+        else 1024
+    )
     max_concurrency_kv = max(1, max_concurrency_kv)  # At least 1
 
     # 2. Prefill Computation Limit (for input throughput)
@@ -672,8 +701,12 @@ def calculate_concurrency_limits(
     # Assuming we want to maintain reasonable TTFT (<500ms) under load
     target_prefill_time_s = 0.5  # 500ms target per request
     # But we can handle multiple requests in parallel/pipeline
-    max_concurrent_prefills = int(effective_prefill_flops * target_prefill_time_s / prefill_flops_per_request)
-    max_concurrent_prefills = max(1, min(max_concurrent_prefills, 512))  # Cap at reasonable limit
+    max_concurrent_prefills = int(
+        effective_prefill_flops * target_prefill_time_s / prefill_flops_per_request
+    )
+    max_concurrent_prefills = max(
+        1, min(max_concurrent_prefills, 512)
+    )  # Cap at reasonable limit
 
     # 3. Decode Computation/Memory Bandwidth Limit (for output throughput)
     # This is about sustained token generation capacity across all concurrent requests
@@ -685,23 +718,32 @@ def calculate_concurrency_limits(
 
     # Memory bandwidth limit: How many tokens can we generate per second?
     from llm_optimizer.common import get_precision_bytes_per_param
+
     bytes_per_param = get_precision_bytes_per_param(precision)
-    decode_tokens_per_sec_memory = gpu_resources.total_bandwidth_bytes_per_sec / (bytes_per_param * model_config.num_params)
+    decode_tokens_per_sec_memory = gpu_resources.total_bandwidth_bytes_per_sec / (
+        bytes_per_param * model_config.num_params
+    )
 
     # Take the bottleneck (minimum)
-    decode_tokens_per_sec = min(decode_tokens_per_sec_compute, decode_tokens_per_sec_memory)
+    decode_tokens_per_sec = min(
+        decode_tokens_per_sec_compute, decode_tokens_per_sec_memory
+    )
 
     # For reasonable ITL (<50ms per token), we can serve this many concurrent requests
     target_itl_s = 0.05  # 50ms target per token
     # Each request needs 1 token per ITL period, so max concurrent = total_tokens_per_sec * ITL_period
     max_concurrent_decodes = int(decode_tokens_per_sec * target_itl_s)
-    max_concurrent_decodes = max(1, min(max_concurrent_decodes, 1024))  # Cap at reasonable limit
+    max_concurrent_decodes = max(
+        1, min(max_concurrent_decodes, 1024)
+    )  # Cap at reasonable limit
 
     return {
         "kv_cache_limit": max_concurrency_kv,
         "prefill_compute_limit": max_concurrent_prefills,
         "decode_capacity_limit": max_concurrent_decodes,
-        "overall_limit": min(max_concurrency_kv, max_concurrent_prefills, max_concurrent_decodes),
+        "overall_limit": min(
+            max_concurrency_kv, max_concurrent_prefills, max_concurrent_decodes
+        ),
     }
 
 
@@ -752,11 +794,15 @@ def find_optimal_concurrency_threshold(
 
     # Test concurrency levels up to the theoretical limit
     concurrency_levels = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    concurrency_levels = [c for c in concurrency_levels if c <= max_practical_concurrency]
+    concurrency_levels = [
+        c for c in concurrency_levels if c <= max_practical_concurrency
+    ]
 
     # Always test at least up to 16 even if theoretical limits suggest lower
     if max_practical_concurrency < 16:
-        concurrency_levels.extend([c for c in [2, 4, 8, 16] if c not in concurrency_levels])
+        concurrency_levels.extend(
+            [c for c in [2, 4, 8, 16] if c not in concurrency_levels]
+        )
         concurrency_levels = sorted(set(concurrency_levels))
 
     prev_throughput = 0
@@ -860,7 +906,9 @@ def parse_slo_constraints(constraints_str: str) -> list[SLOConstraint]:
             stat_type = stat_type.strip().lower()
 
             if stat_type not in valid_stat_types:
-                raise ValueError(f"Invalid statistical type '{stat_type}'. Valid types: {valid_stat_types}")
+                raise ValueError(
+                    f"Invalid statistical type '{stat_type}'. Valid types: {valid_stat_types}"
+                )
         else:
             metric = metric_part
             stat_type = "mean"  # default
@@ -885,12 +933,16 @@ def parse_slo_constraints(constraints_str: str) -> list[SLOConstraint]:
             raise ValueError(f"Invalid value in constraint: {value_part}")
 
         constraints.append(
-            SLOConstraint(metric=metric, stat_type=stat_type, operator=operator, value=value, unit=unit)
+            SLOConstraint(
+                metric=metric,
+                stat_type=stat_type,
+                operator=operator,
+                value=value,
+                unit=unit,
+            )
         )
 
     return constraints
-
-
 
 
 def get_stat_type_adjustment_factor(stat_type: str) -> float:
@@ -914,10 +966,10 @@ def get_stat_type_adjustment_factor(stat_type: str) -> float:
         Adjustment factor to apply to theoretical metric values
     """
     adjustment_factors = {
-        "mean": 1.0,     # Baseline
-        "median": 1.1,   # Slightly more conservative than mean
-        "p95": 1.3,      # 30% higher for 95th percentile
-        "p99": 1.6,      # 60% higher for 99th percentile
+        "mean": 1.0,  # Baseline
+        "median": 1.1,  # Slightly more conservative than mean
+        "p95": 1.3,  # 30% higher for 95th percentile
+        "p99": 1.6,  # 60% higher for 99th percentile
     }
 
     return adjustment_factors.get(stat_type, 1.0)
@@ -939,10 +991,10 @@ def get_parameter_conservativeness_for_stat_type(stat_type: str) -> float:
         Conservativeness factor (0.0 to 1.0, where 1.0 is most conservative)
     """
     conservativeness = {
-        "mean": 0.3,     # Aggressive settings for throughput
-        "median": 0.5,   # Balanced settings
-        "p95": 0.7,      # Conservative for good tail latency
-        "p99": 0.9,      # Very conservative for excellent tail latency
+        "mean": 0.3,  # Aggressive settings for throughput
+        "median": 0.5,  # Balanced settings
+        "p95": 0.7,  # Conservative for good tail latency
+        "p99": 0.9,  # Very conservative for excellent tail latency
     }
 
     return conservativeness.get(stat_type, 0.5)
@@ -1002,7 +1054,9 @@ def estimate_performance_under_constraints(
 
             # Apply statistical type adjustment factor for theoretical estimation
             # Note: For true percentile evaluation, multiple samples would be needed
-            stat_adjustment_factor = get_stat_type_adjustment_factor(constraint.stat_type)
+            stat_adjustment_factor = get_stat_type_adjustment_factor(
+                constraint.stat_type
+            )
             metric_value *= stat_adjustment_factor
 
             # Check constraint
@@ -1064,6 +1118,7 @@ def estimate_performance_under_constraints(
 @dataclass
 class PerformanceEstimationParams:
     """Parameters for performance estimation."""
+
     model: str
     input_len: int
     output_len: int
@@ -1079,6 +1134,7 @@ class PerformanceEstimationParams:
 @dataclass
 class PerformanceEstimationResult:
     """Results from performance estimation."""
+
     model_config: t.Any
     best_configs: dict
     concurrency_limits: dict
@@ -1087,7 +1143,9 @@ class PerformanceEstimationResult:
     tuning_commands: Optional[dict] = None
 
 
-def run_performance_estimation(params: PerformanceEstimationParams) -> tuple[PerformanceEstimationParams, PerformanceEstimationResult]:
+def run_performance_estimation(
+    params: PerformanceEstimationParams,
+) -> tuple[PerformanceEstimationParams, PerformanceEstimationResult]:
     """
     Run performance estimation with given parameters.
 
@@ -1178,7 +1236,9 @@ def run_performance_estimation(params: PerformanceEstimationParams) -> tuple[Per
         )
 
         if not constrained_result:
-            raise ValueError("Cannot satisfy the given constraints with this configuration")
+            raise ValueError(
+                "Cannot satisfy the given constraints with this configuration"
+            )
 
     # Generate tuning configurations
     from llm_optimizer.tuning import (
@@ -1199,17 +1259,18 @@ def run_performance_estimation(params: PerformanceEstimationParams) -> tuple[Per
 
     target_throughput = updated_params.target == "throughput"
     frameworks_to_test = (
-        ["sglang", "vllm"] if updated_params.framework == "both" else [updated_params.framework]
+        ["sglang", "vllm"]
+        if updated_params.framework == "both"
+        else [updated_params.framework]
     )
 
-    tuning_commands = {
-        "simple": {},
-        "advanced": {}
-    }
+    tuning_commands = {"simple": {}, "advanced": {}}
 
     for fw in frameworks_to_test:
         # Use two-stage tuning approach for throughput optimization
-        if parsed_constraints or (target_throughput and updated_params.target == "throughput"):
+        if parsed_constraints or (
+            target_throughput and updated_params.target == "throughput"
+        ):
             # Stage 1: Simple tuning (concurrency + TP/DP only)
             simple_configs = generate_simple_tuning_configs(
                 framework=fw,
@@ -1233,7 +1294,7 @@ def run_performance_estimation(params: PerformanceEstimationParams) -> tuple[Per
 
             tuning_commands["simple"][fw] = {
                 "configs": simple_configs,
-                "commands": simple_commands
+                "commands": simple_commands,
             }
 
             # Stage 2: Advanced tuning (additional server parameters)
@@ -1259,7 +1320,7 @@ def run_performance_estimation(params: PerformanceEstimationParams) -> tuple[Per
 
             tuning_commands["advanced"][fw] = {
                 "configs": advanced_configs,
-                "commands": advanced_commands
+                "commands": advanced_commands,
             }
         else:
             # For latency optimization, use traditional approach with multiple configs
@@ -1287,7 +1348,7 @@ def run_performance_estimation(params: PerformanceEstimationParams) -> tuple[Per
             # For latency optimization, put everything in "simple" to maintain compatibility
             tuning_commands["simple"][fw] = {
                 "configs": tuning_configs,
-                "commands": commands
+                "commands": commands,
             }
 
     result = PerformanceEstimationResult(
@@ -1296,13 +1357,15 @@ def run_performance_estimation(params: PerformanceEstimationParams) -> tuple[Per
         concurrency_limits=concurrency_limits,
         optimal_concurrency=optimal_concurrency,
         constrained_result=constrained_result,
-        tuning_commands=tuning_commands
+        tuning_commands=tuning_commands,
     )
 
     return updated_params, result
 
 
-def display_performance_estimation_results(params: PerformanceEstimationParams, result: PerformanceEstimationResult):
+def display_performance_estimation_results(
+    params: PerformanceEstimationParams, result: PerformanceEstimationResult
+):
     """Display performance estimation results in a consistent format."""
 
     click.echo("\n=== Configuration ===")
@@ -1317,7 +1380,7 @@ def display_performance_estimation_results(params: PerformanceEstimationParams, 
     # Model info
     click.echo("\nFetching model configuration...")
     click.echo(
-        f"Model: {result.model_config.num_params:.1f}B parameters, {result.model_config.num_layers} layers"
+        f"Model: {result.model_config.num_params / 1e9:.1f}B parameters, {result.model_config.num_layers} layers"
     )
 
     # Parse constraints if provided
@@ -1341,15 +1404,9 @@ def display_performance_estimation_results(params: PerformanceEstimationParams, 
 
     if result.best_configs["best_output_throughput"]:
         throughput_config = result.best_configs["best_output_throughput"]
-        click.echo(
-            f"\nBest Throughput (concurrency={throughput_config.concurrency}):"
-        )
-        click.echo(
-            f"  Output: {throughput_config.output_throughput_tps:.1f} tokens/s"
-        )
-        click.echo(
-            f"  Input: {throughput_config.input_throughput_tps:.1f} tokens/s"
-        )
+        click.echo(f"\nBest Throughput (concurrency={throughput_config.concurrency}):")
+        click.echo(f"  Output: {throughput_config.output_throughput_tps:.1f} tokens/s")
+        click.echo(f"  Input: {throughput_config.input_throughput_tps:.1f} tokens/s")
         click.echo(f"  Requests: {throughput_config.requests_per_sec:.2f} req/s")
         click.echo(
             f"  Bottleneck: {'Memory' if throughput_config.bottleneck_is_memory else 'Compute'}"
@@ -1359,19 +1416,39 @@ def display_performance_estimation_results(params: PerformanceEstimationParams, 
     click.echo("\n=== Roofline Analysis ===")
     if result.best_configs["best_output_throughput"]:
         config = result.best_configs["best_output_throughput"]
-        click.echo(f"Hardware Ops/Byte Ratio: {config.hardware_ops_per_byte:.1f} ops/byte")
-        click.echo(f"Prefill Arithmetic Intensity: {config.prefill_arithmetic_intensity:.1f} ops/byte")
-        click.echo(f"Decode Arithmetic Intensity: {config.decode_arithmetic_intensity:.1f} ops/byte")
-        click.echo(f"Prefill Phase: {'Memory Bound' if config.prefill_is_memory_bound else 'Compute Bound'}")
-        click.echo(f"Decode Phase: {'Memory Bound' if config.decode_is_memory_bound else 'Compute Bound'}")
+        click.echo(
+            f"Hardware Ops/Byte Ratio: {config.hardware_ops_per_byte:.1f} ops/byte"
+        )
+        click.echo(
+            f"Prefill Arithmetic Intensity: {config.prefill_arithmetic_intensity:.1f} ops/byte"
+        )
+        click.echo(
+            f"Decode Arithmetic Intensity: {config.decode_arithmetic_intensity:.1f} ops/byte"
+        )
+        click.echo(
+            f"Prefill Phase: {'Memory Bound' if config.prefill_is_memory_bound else 'Compute Bound'}"
+        )
+        click.echo(
+            f"Decode Phase: {'Memory Bound' if config.decode_is_memory_bound else 'Compute Bound'}"
+        )
 
     # Concurrency Analysis
     click.echo("\n=== Concurrency Analysis ===")
-    click.echo(f"KV Cache Memory Limit: {result.concurrency_limits['kv_cache_limit']} concurrent requests")
-    click.echo(f"Prefill Compute Limit: {result.concurrency_limits['prefill_compute_limit']} concurrent requests")
-    click.echo(f"Decode Capacity Limit: {result.concurrency_limits['decode_capacity_limit']} concurrent requests")
-    click.echo(f"Theoretical Overall Limit: {result.concurrency_limits['overall_limit']} concurrent requests")
-    click.echo(f"Empirical Optimal Concurrency: {result.optimal_concurrency} concurrent requests")
+    click.echo(
+        f"KV Cache Memory Limit: {result.concurrency_limits['kv_cache_limit']} concurrent requests"
+    )
+    click.echo(
+        f"Prefill Compute Limit: {result.concurrency_limits['prefill_compute_limit']} concurrent requests"
+    )
+    click.echo(
+        f"Decode Capacity Limit: {result.concurrency_limits['decode_capacity_limit']} concurrent requests"
+    )
+    click.echo(
+        f"Theoretical Overall Limit: {result.concurrency_limits['overall_limit']} concurrent requests"
+    )
+    click.echo(
+        f"Empirical Optimal Concurrency: {result.optimal_concurrency} concurrent requests"
+    )
 
     # Constrained Performance
     if result.constrained_result:
@@ -1383,9 +1460,7 @@ def display_performance_estimation_results(params: PerformanceEstimationParams, 
             f"Output throughput: {result.constrained_result.output_throughput_tps:.1f} tokens/s"
         )
     elif params.constraints:
-        click.echo(
-            "\n❌ Cannot satisfy the given constraints with this configuration"
-        )
+        click.echo("\n❌ Cannot satisfy the given constraints with this configuration")
         return
 
     # Tuning Commands (Two-Stage Structure)
@@ -1404,15 +1479,23 @@ def display_performance_estimation_results(params: PerformanceEstimationParams, 
             click.echo(f"\n--- {fw.upper()} ---")
 
             # Simple configs
-            if result.tuning_commands.get("simple") and fw in result.tuning_commands["simple"]:
+            if (
+                result.tuning_commands.get("simple")
+                and fw in result.tuning_commands["simple"]
+            ):
                 simple_data = result.tuning_commands["simple"][fw]
                 click.echo("Simple (concurrency + TP/DP):")
                 for config, cmd in zip(simple_data["configs"], simple_data["commands"]):
                     click.echo(f"  {cmd}")
 
             # Advanced configs
-            if result.tuning_commands.get("advanced") and fw in result.tuning_commands["advanced"]:
+            if (
+                result.tuning_commands.get("advanced")
+                and fw in result.tuning_commands["advanced"]
+            ):
                 advanced_data = result.tuning_commands["advanced"][fw]
                 click.echo("Advanced (additional parameters):")
-                for config, cmd in zip(advanced_data["configs"], advanced_data["commands"]):
+                for config, cmd in zip(
+                    advanced_data["configs"], advanced_data["commands"]
+                ):
                     click.echo(f"  {cmd}")

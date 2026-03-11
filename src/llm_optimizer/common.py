@@ -215,7 +215,7 @@ def calculate_model_parameters_from_config(config: dict) -> int:
         # Extract parameters needed for calculation
         h = config["hidden_size"]
         n_layers = config["num_hidden_layers"]
-        
+
         # Determine intermediate size, fallback to moe_intermediate_size if needed
         i = config.get("intermediate_size")
         if i is None:
@@ -233,8 +233,11 @@ def calculate_model_parameters_from_config(config: dict) -> int:
             h * (n_heads * head_dim) + h * (n_kv_heads * head_dim) * 2 + h * h
         )
 
+        # Check for MoE
+        num_experts = config.get("num_local_experts", config.get("num_experts", 1))
+
         # FFN params (assuming SwiGLU)
-        ffn_params = n_layers * (h * i * 2 + i * h)
+        ffn_params = n_layers * (h * i * 2 + i * h) * num_experts
 
         # Embedding and output params
         embedding_params = v * h
@@ -381,9 +384,12 @@ def infer_precision_from_config(config: dict, model_id: str = None) -> str:
                 "float-quantized",
             ]
 
-# Check for FP4
+            # Check for FP4
             fp4_indicators = ["fp4", "nvfp4"]
-            if any(indicator in quant_method or indicator in format_name for indicator in fp4_indicators):
+            if any(
+                indicator in quant_method or indicator in format_name
+                for indicator in fp4_indicators
+            ):
                 return "fp4"
 
             # Helper to check config groups
@@ -415,12 +421,19 @@ def infer_precision_from_config(config: dict, model_id: str = None) -> str:
 
             # Check FP8 by indicators (but only if it's not compressed-tensors with 4-bit)
             # Remove compressed-tensors from blind fp8 indicators
-            fp8_indicators_strict = [i for i in fp8_indicators if i != "compressed-tensors"]
-            if any(indicator in quant_method or indicator in format_name for indicator in fp8_indicators_strict):
+            fp8_indicators_strict = [
+                i for i in fp8_indicators if i != "compressed-tensors"
+            ]
+            if any(
+                indicator in quant_method or indicator in format_name
+                for indicator in fp8_indicators_strict
+            ):
                 return "fp8"
 
             # If compressed-tensors but we didn't return int4 above, and it has 8-bit weights, it's FP8
-            if is_compressed_tensors and (bits == 8 or weight_bits == 8 or group_weight_bits == 8):
+            if is_compressed_tensors and (
+                bits == 8 or weight_bits == 8 or group_weight_bits == 8
+            ):
                 return "fp8"
             if is_compressed_tensors and group_weight_bits is None:
                 # Fallback for compressed-tensors without explicit group bits
@@ -428,7 +441,7 @@ def infer_precision_from_config(config: dict, model_id: str = None) -> str:
 
             # 8-bit weights + 8-bit activations often indicates FP8 (legacy check)
             if bits == 8 or (weight_bits == 8 and activation_bits == 8):
-                return "fp8" 
+                return "fp8"
 
     # Check model ID/name for precision hints (high priority)
     # This checks the original model ID passed to the function
@@ -436,7 +449,11 @@ def infer_precision_from_config(config: dict, model_id: str = None) -> str:
         model_id_lower = model_id.lower()
         if "fp4" in model_id_lower or "nvfp4" in model_id_lower:
             return "fp4"
-        elif "int4" in model_id_lower or "awq" in model_id_lower or "gptq" in model_id_lower:
+        elif (
+            "int4" in model_id_lower
+            or "awq" in model_id_lower
+            or "gptq" in model_id_lower
+        ):
             return "int4"
         elif "fp8" in model_id_lower:
             return "fp8"
@@ -513,59 +530,73 @@ def get_model_config_from_hf(model_id: str) -> ModelConfig:
 def get_quantization_from_hub(model_id: str) -> Optional[str]:
     """
     Try to detect quantization from HF Hub metadata if config is missing or incomplete.
-    
+
     This checks repository tags, sibling filenames (like .gguf), and ModelCard text metadata
-    to reliably find quantization formats (FP4, FP8, INT4, INT8, AWQ, GPTQ) even for models 
+    to reliably find quantization formats (FP4, FP8, INT4, INT8, AWQ, GPTQ) even for models
     with non-standard structures like Mistral.
-    
+
     Args:
         model_id: HuggingFace model identifier
-        
+
     Returns:
         str: Inferred precision ("fp4", "fp8", "int4", "int8") or None if not detected
     """
     try:
         from huggingface_hub import model_info
+
         info = model_info(model_id)
-        
+
         # 1. Tags inspection
         tags = [t.lower() for t in info.tags] if info.tags else []
-        if "fp4" in tags or "nvfp4" in tags: return "fp4"
-        if "fp8" in tags: return "fp8"
-        if "awq" in tags or "gptq" in tags or "int4" in tags: return "int4"
-        if "int8" in tags: return "int8"
-            
+        if "fp4" in tags or "nvfp4" in tags:
+            return "fp4"
+        if "fp8" in tags:
+            return "fp8"
+        if "awq" in tags or "gptq" in tags or "int4" in tags:
+            return "int4"
+        if "int8" in tags:
+            return "int8"
+
         # 2. Sibling files inspection
         siblings = [f.rfilename.lower() for f in info.siblings] if info.siblings else []
         for s in siblings:
             if s.endswith(".gguf"):
-                return "int4" # Assume typical gguf is int4 for sizing if not specified
-                
+                return "int4"  # Assume typical gguf is int4 for sizing if not specified
+
         # 3. ModelCard metadata inspection
         try:
             from huggingface_hub import ModelCard
+
             card = ModelCard.load(model_id)
             if card.data:
                 card_dict = card.data.to_dict()
-                
+
                 # Check quantization tags in card
                 card_tags = card_dict.get("tags", [])
                 if isinstance(card_tags, list):
                     ctags = [t.lower() for t in card_tags]
-                    if "fp4" in ctags or "nvfp4" in ctags: return "fp4"
-                    if "fp8" in ctags: return "fp8"
-                    if "awq" in ctags or "gptq" in ctags or "int4" in ctags: return "int4"
-                    if "int8" in ctags: return "int8"
-                    
+                    if "fp4" in ctags or "nvfp4" in ctags:
+                        return "fp4"
+                    if "fp8" in ctags:
+                        return "fp8"
+                    if "awq" in ctags or "gptq" in ctags or "int4" in ctags:
+                        return "int4"
+                    if "int8" in ctags:
+                        return "int8"
+
                 # Check specific metadata fields commonly used by quantizers
                 base_model = str(card_dict.get("base_model", "")).lower()
                 quant_by = str(card_dict.get("quantized_by", "")).lower()
-                
-                if "fp8" in quant_by or "fp8" in base_model: return "fp8"
-                if "fp4" in quant_by or "fp4" in base_model: return "fp4"
-                if "awq" in quant_by or "gptq" in quant_by or "int4" in quant_by: return "int4"
-                if "int8" in quant_by: return "int8"
-                
+
+                if "fp8" in quant_by or "fp8" in base_model:
+                    return "fp8"
+                if "fp4" in quant_by or "fp4" in base_model:
+                    return "fp4"
+                if "awq" in quant_by or "gptq" in quant_by or "int4" in quant_by:
+                    return "int4"
+                if "int8" in quant_by:
+                    return "int8"
+
             # Fallback for Mistral and other models that just say "FP8" in the markdown somewhere
             if card.text:
                 text_lower = card.text.lower()
@@ -575,14 +606,15 @@ def get_quantization_from_hub(model_id: str) -> Optional[str]:
                     return "int4"
                 if "awq" in text_lower and "int4" in text_lower:
                     return "int4"
-                
+
         except Exception:
             pass
-            
+
     except Exception:
         pass
-        
+
     return None
+
 
 def get_model_config_and_precision_from_hf(model_id: str) -> ModelConfig:
     """
@@ -611,18 +643,22 @@ def get_model_config_and_precision_from_hf(model_id: str) -> ModelConfig:
             params_path = hf_hub_download(repo_id=model_id, filename="params.json")
             with open(params_path) as f:
                 params_config = json.load(f)
-                
+
             # Normalize params.json to config.json structure
             config = {
                 "hidden_size": params_config.get("dim"),
                 "num_hidden_layers": params_config.get("n_layers"),
                 "num_attention_heads": params_config.get("n_heads"),
                 "num_key_value_heads": params_config.get("n_kv_heads"),
-                "vocab_size": params_config.get("vocab_size", 32000), # Default if missing
-                "intermediate_size": params_config.get("hidden_dim", params_config.get("dim", 0) * 4), # Guess if missing
-                "quantization_config": params_config.get("quantization_config", {})
+                "vocab_size": params_config.get(
+                    "vocab_size", 32000
+                ),  # Default if missing
+                "intermediate_size": params_config.get(
+                    "hidden_dim", params_config.get("dim", 0) * 4
+                ),  # Guess if missing
+                "quantization_config": params_config.get("quantization_config", {}),
             }
-            
+
             # Map Mistral MoE parameters to standard HuggingFace MoE format so param calculations are accurate
             if "moe" in params_config:
                 moe_cfg = params_config["moe"]
@@ -661,7 +697,7 @@ def get_model_config_and_precision_from_hf(model_id: str) -> ModelConfig:
 
         # 1. First try checking Hub metadata directly for the most reliable quantization label
         precision = get_quantization_from_hub(model_id)
-        
+
         # 2. If Hub metadata lacks quantization, infer from config
         if not precision:
             precision = infer_precision_from_config(config, model_id)
@@ -679,5 +715,6 @@ def get_model_config_and_precision_from_hf(model_id: str) -> ModelConfig:
         return model_config
 
     except KeyError as e:
-        raise KeyError(f"Could not find required key {e} in {config_source} for {model_id}")
-
+        raise KeyError(
+            f"Could not find required key {e} in {config_source} for {model_id}"
+        )

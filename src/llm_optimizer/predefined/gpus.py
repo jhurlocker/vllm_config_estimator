@@ -57,6 +57,22 @@ GPU_SPECS = {
         "Architecture": "Ada Lovelace",
         "Memory_Type": "GDDR6",
     },
+    "L40S": {
+        "FP16_TFLOPS": 362.0,  # Official NVIDIA specification (dense)
+        "FP8_TFLOPS": 733.0,  # Ada Lovelace 4th gen Tensor Cores
+        "Memory_Bandwidth_GBs": 864,  # GDDR6 memory bandwidth
+        "VRAM_GB": 48,
+        "Architecture": "Ada Lovelace",
+        "Memory_Type": "GDDR6",
+    },
+    "L4": {
+        "FP16_TFLOPS": 120.0,  # Official NVIDIA specification (dense)
+        "FP8_TFLOPS": 242.0,  # Ada Lovelace 4th gen Tensor Cores
+        "Memory_Bandwidth_GBs": 300,  # GDDR6 memory bandwidth
+        "VRAM_GB": 24,
+        "Architecture": "Ada Lovelace",
+        "Memory_Type": "GDDR6",
+    },
     # NVIDIA Blackwell Architecture GPUs (Future)
     "B100": {
         "FP16_TFLOPS": 1800.0,  # Official NVIDIA specification (dense)
@@ -96,7 +112,9 @@ def get_gpu_specs(gpu_name: str) -> dict:
     if normalized_name not in GPU_SPECS:
         available = ", ".join(GPU_SPECS.keys())
         available_lower = ", ".join([name.lower() for name in GPU_SPECS.keys()])
-        raise ValueError(f"GPU '{gpu_name}' not found. Available GPUs: {available} (case-insensitive: {available_lower})")
+        raise ValueError(
+            f"GPU '{gpu_name}' not found. Available GPUs: {available} (case-insensitive: {available_lower})"
+        )
 
     return GPU_SPECS[normalized_name].copy()
 

@@ -309,6 +309,18 @@
                 `;
             }
 
+            let otherArgsHtml = '';
+            if (candidate.other_args_to_consider && candidate.other_args_to_consider.length > 0) {
+                otherArgsHtml = `
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="margin-top: 0;">Other Arguments to Consider</h4>
+                        <ul style="margin-top: 5px;">
+                            ${candidate.other_args_to_consider.map(arg => `<li>${arg.replace(/`([^`]+)`/g, '<code>$1</code>')}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
             let guidellmHtml = '';
             if (candidate.guidellm_cmd) {
                 guidellmHtml = `
@@ -328,6 +340,8 @@
                 </div>
                 
                 ${tuningKnobsHtml}
+
+                ${otherArgsHtml}
                 
                 ${guidellmHtml}
                 

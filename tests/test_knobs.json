@@ -67,6 +67,7 @@
         "`--max-num-seqs`: Decrease to further protect TTFT (Time To First Token), or increase slightly if you have VRAM to spare.",
         "`--max-num-batched-tokens`: Lower values force the scheduler to yield more often, improving streaming smoothness at the cost of overall throughput."
       ],
+      "other_args_to_consider": [],
       "guidellm_cmd": "guidellm --target http://localhost:8000/v1 \\\n  --model meta-llama/Llama-3-8B-Instruct \\\n  --data-type emulated \\\n  --emulated-prompt-tokens 1024 \\\n  --emulated-generated-tokens 256 \\\n  --max-prompts 500 \\\n  --rate-type concurrency \\\n  --rate 1,2,4,8,16"
     },
     {
@@ -117,6 +118,7 @@
         "`--max-model-len`: Lowering this limits maximum request size but allows more simultaneous requests.",
         "`--enable-chunked-prefill`: Toggling this off might improve small-prompt performance, but can severely penalize TTFT for concurrent requests if prompts are large."
       ],
+      "other_args_to_consider": [],
       "guidellm_cmd": "guidellm --target http://localhost:8000/v1 \\\n  --model meta-llama/Llama-3-8B-Instruct \\\n  --data-type emulated \\\n  --emulated-prompt-tokens 1024 \\\n  --emulated-generated-tokens 256 \\\n  --max-prompts 500 \\\n  --rate-type concurrency \\\n  --rate 1,8,32,64,128"
     },
     {
@@ -167,6 +169,7 @@
         "`--max-num-batched-tokens`: Increase to allow more prompt tokens to be processed in a single forward pass, heavily utilizing GPU compute.",
         "`--max-model-len`: If your workload doesn't need the full context window, decreasing this frees up significant KV cache for even higher concurrency."
       ],
+      "other_args_to_consider": [],
       "guidellm_cmd": "guidellm --target http://localhost:8000/v1 \\\n  --model meta-llama/Llama-3-8B-Instruct \\\n  --data-type emulated \\\n  --emulated-prompt-tokens 1024 \\\n  --emulated-generated-tokens 256 \\\n  --max-prompts 500 \\\n  --rate-type concurrency \\\n  --rate 16,32,64,128,256"
     }
   ]
